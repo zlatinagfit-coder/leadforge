@@ -19,69 +19,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid secret" }, { status: 401 });
   }
 
+  const wipeAll = req.nextUrl.searchParams.get("wipeAll") === "true";
+
   try {
+    await prisma.followUp.deleteMany();
     await prisma.aiActivity.deleteMany();
     await prisma.inboxMessage.deleteMany();
     await prisma.inboxThread.deleteMany();
     await prisma.message.deleteMany();
     await prisma.campaign.deleteMany();
     await prisma.lead.deleteMany();
+    await prisma.sendingInbox.deleteMany();
 
-    // Keep the existing workspace + user, but ensure there's at least one
-    let workspace = await prisma.workspace.findFirst();
-    if (!workspace) {
-      workspace = await prisma.workspace.create({
-        data: { name: "LeadForge HQ", slug: "leadforge-hq", accentColor: "#E10C2F", plan: "agency", monthlyQuota: 500, usedThisMonth: 0 },
-      });
-    } else {
-      await prisma.workspace.update({
-        where: { id: workspace.id },
-        data: { usedThisMonth: 0 },
+    if (wipeAll) {
+      // Full nuke — wipe users too so anyone can register fresh
+      await prisma.membership.deleteMany();
+      await prisma.workspace.deleteMany();
+      await prisma.user.deleteMany();
+      return NextResponse.json({
+        success: true,
+        message: "Full wipe complete. Go to /signup to create a fresh account.",
       });
     }
 
-    let user = await prisma.user.findFirst();
-    if (!user) {
-      user = await prisma.user.create({
-        data: { email: "zlatinagfit@gmail.com", name: "Zlatina G.", emailVerified: new Date() },
-      });
-      await prisma.membership.create({
-        data: { userId: user.id, workspaceId: workspace.id, role: "owner" },
-      });
-    }
-
-    // Reset sending inboxes counters but keep them
-    const inboxCount = await prisma.sendingInbox.count({ where: { workspaceId: workspace.id } });
-    if (inboxCount === 0) {
-      await prisma.sendingInbox.create({
-        data: {
-          workspaceId: workspace.id,
-          label: "primary",
-          provider: "resend",
-          fromEmail: process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev",
-          fromName: process.env.RESEND_FROM_NAME ?? "LeadForge",
-          dailyLimit: 100,
-          sentToday: 0,
-          warmedUp: true,
-          health: 100,
-        },
-      });
-    } else {
-      await prisma.sendingInbox.updateMany({
-        where: { workspaceId: workspace.id },
-        data: { sentToday: 0, health: 100 },
-      });
-    }
-
-    await prisma.aiActivity.create({
-      data: { workspaceId: workspace.id, kind: "compose", tag: "System", text: "Машината е reset-ната — чиста база, готова за реална работа" },
-    });
-
+    // Soft reset: keep workspaces + users, just empty their data
+    const wsCount = await prisma.workspace.count();
     return NextResponse.json({
       success: true,
-      message: "Cleaned. Now click 'Намери нови' or use the AI prompt to start finding real leads.",
-      workspaceId: workspace.id,
-      userEmail: user.email,
+      message: "Cleaned. Workspaces and users preserved. Use ?wipeAll=true to also delete users.",
+      workspacesRemaining: wsCount,
     });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
