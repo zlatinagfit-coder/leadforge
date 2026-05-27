@@ -134,11 +134,11 @@ export async function sendOutreachToLeadAction(leadId: string) {
     return { success: false, error: `AI generate: ${(err as Error).message}` };
   }
 
-  // Always use env-configured sender (so no stale DB rows can break it)
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-  const fromName = process.env.RESEND_FROM_NAME || "LeadForge";
+  // Prefer workspace credentials, fall back to global env
+  const fromEmail = workspace.resendFromEmail || process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  const fromName = workspace.resendFromName || workspace.name || process.env.RESEND_FROM_NAME || "LeadForge";
+  const apiKey = workspace.resendApiKey || process.env.RESEND_API_KEY;
   const ownerEmail = user.email;
-  const inbox = await prisma.sendingInbox.findFirst({ where: { workspaceId: workspace.id } });
 
   // Sandbox = sending domain is resend.dev (no verified domain yet)
   let isSandbox = fromEmail.endsWith("@resend.dev");
@@ -150,9 +150,10 @@ export async function sendOutreachToLeadAction(leadId: string) {
     fromName,
     to: actualRecipient,
     subject: subjectPrefix + email.subject,
-    body: email.body + (isSandbox ? `\n\n---\n[Sandbox mode] Този имейл щеше да бъде изпратен до: ${lead.email}\nЗа да изпращаш реални имейли, verify-ни домейн в Resend и обнови RESEND_FROM_EMAIL.` : ""),
+    body: email.body + (isSandbox ? `\n\n---\n[Sandbox mode] Този имейл щеше да бъде изпратен до: ${lead.email}\nЗа да изпращаш реални имейли, свържи Resend API ключ + verified домейн в Настройки.` : ""),
     replyTo: ownerEmail,
     provider: "resend",
+    apiKey,
   });
 
   // Auto-fallback: if Resend rejects domain → retry as sandbox preview
@@ -166,6 +167,7 @@ export async function sendOutreachToLeadAction(leadId: string) {
       body: email.body + `\n\n---\n[Auto-sandbox fallback] Първият опит към ${lead.email} не успя защото домейнът ${fromEmail.split("@")[1]} не е verified в Resend. Преглеждаш версията тук.`,
       replyTo: ownerEmail,
       provider: "resend",
+      apiKey,
     });
   }
 
@@ -201,20 +203,40 @@ export async function sendOutreachToLeadAction(leadId: string) {
       where: { id: campaign.id },
       data: { sent: { increment: 1 } },
     });
-    if (inbox) {
-      await prisma.sendingInbox.update({
-        where: { id: inbox.id },
-        data: { sentToday: { increment: 1 } },
+
+    // Schedule follow-ups (72h between each step)
+    if (workspace.followupEnabled) {
+      const delayMs = workspace.followupDelayHours * 60 * 60 * 1000;
+      const maxSteps = workspace.followupMaxSteps;
+
+      // Cancel any pending follow-ups for this lead first (idempotency)
+      await prisma.followUp.updateMany({
+        where: { leadId: lead.id, status: "scheduled" },
+        data: { status: "cancelled" },
       });
+
+      for (let step = 1; step <= maxSteps; step++) {
+        await prisma.followUp.create({
+          data: {
+            workspaceId: workspace.id,
+            leadId: lead.id,
+            campaignId: campaign.id,
+            stepNumber: step,
+            scheduledFor: new Date(Date.now() + delayMs * step),
+            status: "scheduled",
+          },
+        });
+      }
     }
+
     await prisma.aiActivity.create({
       data: {
         workspaceId: workspace.id,
         kind: "send",
         tag: "Sender",
         text: isSandbox
-          ? `Sandbox: тест-имейл за ${lead.company} → твоя Gmail`
-          : `Outreach изпратен до ${lead.company} (${lead.email})`,
+          ? `Sandbox: тест-имейл за ${lead.company} → твоя Gmail · ${workspace.followupEnabled ? `${workspace.followupMaxSteps} follow-ups насрочени` : ""}`
+          : `Outreach изпратен до ${lead.company} · ${workspace.followupEnabled ? `следва FU след ${workspace.followupDelayHours}ч` : ""}`,
       },
     });
   } else {
@@ -503,6 +525,57 @@ export async function updateWorkspaceAction(formData: FormData) {
 
   revalidatePath("/settings");
   revalidatePath("/");
+  return { success: true };
+}
+
+export async function updateEmailConfigAction(formData: FormData) {
+  const workspace = await getCurrentWorkspace();
+  const resendApiKey = formData.get("resendApiKey")?.toString().trim() || null;
+  const resendFromEmail = formData.get("resendFromEmail")?.toString().trim().toLowerCase() || null;
+  const resendFromName = formData.get("resendFromName")?.toString().trim() || null;
+
+  // Validate API key format if provided
+  if (resendApiKey && !resendApiKey.startsWith("re_")) {
+    return { success: false, error: "Resend API ключът трябва да започва с 're_'" };
+  }
+
+  // Test the API key
+  if (resendApiKey) {
+    try {
+      const res = await fetch("https://api.resend.com/domains", {
+        headers: { Authorization: `Bearer ${resendApiKey}` },
+      });
+      if (!res.ok) return { success: false, error: `Resend отказа ключа (HTTP ${res.status})` };
+    } catch {
+      return { success: false, error: "Не успях да проверя ключа — провери Resend connection" };
+    }
+  }
+
+  await prisma.workspace.update({
+    where: { id: workspace.id },
+    data: {
+      resendApiKey,
+      resendFromEmail,
+      resendFromName,
+    },
+  });
+
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function updateFollowupConfigAction(formData: FormData) {
+  const workspace = await getCurrentWorkspace();
+  const enabled = formData.get("followupEnabled") === "on" || formData.get("followupEnabled") === "true";
+  const delayHours = Math.max(1, Math.min(720, parseInt(formData.get("followupDelayHours")?.toString() ?? "72")));
+  const maxSteps = Math.max(0, Math.min(5, parseInt(formData.get("followupMaxSteps")?.toString() ?? "2")));
+
+  await prisma.workspace.update({
+    where: { id: workspace.id },
+    data: { followupEnabled: enabled, followupDelayHours: delayHours, followupMaxSteps: maxSteps },
+  });
+
+  revalidatePath("/settings");
   return { success: true };
 }
 

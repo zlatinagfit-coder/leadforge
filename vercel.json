@@ -5,7 +5,7 @@
   "regions": ["fra1"],
   "crons": [
     {
-      "path": "/api/agent/tick",
+      "path": "/api/cron/followups",
       "schedule": "0 9 * * *"
     }
   ]

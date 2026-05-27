@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Trash2, Crown, Check, Loader2, CheckCircle2, AlertCircle, X, Mail } from "lucide-react";
-import { updateWorkspaceAction, addSendingInboxAction, deleteSendingInboxAction, inviteMemberAction, removeMemberAction } from "@/lib/actions";
+import { Plus, Trash2, Crown, Check, Loader2, CheckCircle2, AlertCircle, X, Mail, Key, Clock } from "lucide-react";
+import { updateWorkspaceAction, addSendingInboxAction, deleteSendingInboxAction, inviteMemberAction, removeMemberAction, updateEmailConfigAction, updateFollowupConfigAction } from "@/lib/actions";
 
 const ACCENT_COLORS = [
   { name: "Red", value: "#E10C2F" },
@@ -326,6 +326,180 @@ export function InboxesPanel({ inboxes }: { inboxes: Array<{ id: string; label: 
         </form>
       )}
     </div>
+  );
+}
+
+// ============================================================
+// EMAIL CONFIG PANEL — workspace's own Resend credentials
+// ============================================================
+
+export function EmailConfigPanel({ workspace }: { workspace: { resendApiKey?: string | null; resendFromEmail?: string | null; resendFromName?: string | null } }) {
+  const [apiKey, setApiKey] = useState(workspace.resendApiKey ?? "");
+  const [fromEmail, setFromEmail] = useState(workspace.resendFromEmail ?? "");
+  const [fromName, setFromName] = useState(workspace.resendFromName ?? "");
+  const [showKey, setShowKey] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null);
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResult(null);
+    const fd = new FormData();
+    fd.set("resendApiKey", apiKey);
+    fd.set("resendFromEmail", fromEmail);
+    fd.set("resendFromName", fromName);
+    startTransition(async () => {
+      const res = await updateEmailConfigAction(fd);
+      setResult(res);
+      if (res.success) setTimeout(() => setResult(null), 3000);
+    });
+  };
+
+  const hasKey = !!workspace.resendApiKey;
+
+  return (
+    <form onSubmit={save} className="space-y-3">
+      <div className={`p-3 rounded-lg border text-[12px] ${hasKey ? "bg-green-soft border-green/20 text-green" : "bg-amber-soft border-amber/20 text-amber"}`}>
+        <div className="font-bold flex items-center gap-1.5 mb-1">
+          {hasKey ? <><CheckCircle2 size={13} /> Свързан Resend акаунт</> : <><AlertCircle size={13} /> Sandbox mode</>}
+        </div>
+        <div className="text-ink-3">
+          {hasKey
+            ? `Изпращаш с ${workspace.resendFromName ?? "—"} <${workspace.resendFromEmail ?? "—"}>`
+            : "Резervat sandbox: имейлите се изпращат само на твоя имейл за preview. Свържи Resend API ключ + verified домейн за реално изпращане."}
+        </div>
+      </div>
+
+      <Field label="Resend API ключ" hint="Купи домейн ($10/год) → verify в Resend → копирай API ключа от https://resend.com/api-keys">
+        <div className="relative">
+          <input
+            type={showKey ? "text" : "password"}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            disabled={pending}
+            placeholder="re_..."
+            className="w-full h-9 pl-3 pr-12 rounded-lg bg-bg border border-line text-[12.5px] mono focus:outline-none focus:border-ink-5"
+          />
+          <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10.5px] mono text-ink-4 hover:text-ink">
+            {showKey ? "скрий" : "покажи"}
+          </button>
+        </div>
+      </Field>
+
+      <Field label="From email" hint="Verified домейн в Resend, напр. hi@yourcompany.com">
+        <input
+          type="email"
+          value={fromEmail}
+          onChange={(e) => setFromEmail(e.target.value)}
+          disabled={pending}
+          placeholder="hi@yourcompany.com"
+          className="w-full h-9 px-3 rounded-lg bg-bg border border-line text-[12.5px] mono focus:outline-none focus:border-ink-5"
+        />
+      </Field>
+
+      <Field label="From name" hint="Името което клиентите виждат в Inbox-а си">
+        <input
+          value={fromName}
+          onChange={(e) => setFromName(e.target.value)}
+          disabled={pending}
+          placeholder="напр. Zlatina от LeadForge"
+          className="w-full h-9 px-3 rounded-lg bg-bg border border-line text-[12.5px] focus:outline-none focus:border-ink-5"
+        />
+      </Field>
+
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
+        {result?.success && <span className="text-[12px] text-green flex items-center gap-1"><CheckCircle2 size={12} /> Запазено и тествано</span>}
+        {result?.error && <span className="text-[12px] text-red flex items-center gap-1"><AlertCircle size={12} /> {result.error}</span>}
+        <button type="submit" disabled={pending} className="h-9 px-4 rounded-lg bg-ink text-bg text-[12.5px] font-semibold hover:bg-ink-2 disabled:opacity-50 inline-flex items-center gap-1.5">
+          {pending ? <Loader2 size={12} className="animate-spin" /> : <Key size={12} />}
+          {pending ? "Тествам и запазвам..." : "Запази Resend credentials"}
+        </button>
+      </div>
+
+      <div className="text-[11px] text-ink-4 pt-1">
+        💡 Как да получиш Resend API ключ + verified домейн:<br />
+        1. Купи домейн ($10/год от <a href="https://cloudflare.com/products/registrar" target="_blank" rel="noreferrer" className="text-blue underline">Cloudflare</a>)<br />
+        2. Иди на <a href="https://resend.com/signup" target="_blank" rel="noreferrer" className="text-blue underline">resend.com</a> · Add Domain · добавиш DNS записите<br />
+        3. API Keys → Create → копирай ключа (re_...) и го постави тук
+      </div>
+    </form>
+  );
+}
+
+// ============================================================
+// FOLLOWUP CONFIG PANEL
+// ============================================================
+
+export function FollowupConfigPanel({ workspace }: { workspace: { followupEnabled: boolean; followupDelayHours: number; followupMaxSteps: number } }) {
+  const [enabled, setEnabled] = useState(workspace.followupEnabled);
+  const [delayHours, setDelayHours] = useState(workspace.followupDelayHours);
+  const [maxSteps, setMaxSteps] = useState(workspace.followupMaxSteps);
+  const [pending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.set("followupEnabled", enabled ? "true" : "false");
+    fd.set("followupDelayHours", String(delayHours));
+    fd.set("followupMaxSteps", String(maxSteps));
+    startTransition(async () => {
+      await updateFollowupConfigAction(fd);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    });
+  };
+
+  return (
+    <form onSubmit={save} className="space-y-3">
+      <div className={`p-3 rounded-lg border text-[12px] ${enabled ? "bg-blue-soft border-blue/20 text-blue" : "bg-surface border-line text-ink-3"}`}>
+        <div className="font-bold flex items-center gap-1.5 mb-1">
+          <Clock size={13} />
+          {enabled ? `Авто follow-up: до ${maxSteps} имейла, по ${delayHours}ч delay` : "Авто follow-up изключен"}
+        </div>
+        <div className="text-ink-3 text-[11.5px]">
+          {enabled ? `След outreach: ако няма отговор след ${delayHours}ч → FU #1. След още ${delayHours}ч → FU #2. Cron runs once daily.` : "Включи за автоматични follow-up имейли когато lead не отговаря."}
+        </div>
+      </div>
+
+      <Field label="Включен" hint="Master switch за всички follow-ups">
+        <button type="button" onClick={() => setEnabled(!enabled)} className={`relative w-10 h-6 rounded-full transition ${enabled ? "bg-red" : "bg-surface-2"}`}>
+          <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-bg shadow-sm transition ${enabled ? "translate-x-4" : ""}`} />
+        </button>
+      </Field>
+
+      <Field label="Часове между follow-ups" hint="Препоръчвам 72 (3 дни) — sweet spot между настойчивост и spam">
+        <input
+          type="number"
+          min={1}
+          max={720}
+          value={delayHours}
+          onChange={(e) => setDelayHours(Number(e.target.value))}
+          disabled={pending || !enabled}
+          className="w-32 h-9 px-3 rounded-lg bg-bg border border-line text-[13px] mono focus:outline-none focus:border-ink-5 disabled:opacity-50"
+        />
+      </Field>
+
+      <Field label="Брой follow-ups" hint="Max 5. След последния → ако пак няма отговор, lead-ът остава в 'contacted'">
+        <input
+          type="number"
+          min={0}
+          max={5}
+          value={maxSteps}
+          onChange={(e) => setMaxSteps(Number(e.target.value))}
+          disabled={pending || !enabled}
+          className="w-32 h-9 px-3 rounded-lg bg-bg border border-line text-[13px] mono focus:outline-none focus:border-ink-5 disabled:opacity-50"
+        />
+      </Field>
+
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
+        {saved && <span className="text-[12px] text-green flex items-center gap-1"><CheckCircle2 size={12} /> Запазено</span>}
+        <button type="submit" disabled={pending} className="h-9 px-4 rounded-lg bg-ink text-bg text-[12.5px] font-semibold hover:bg-ink-2 disabled:opacity-50 inline-flex items-center gap-1.5">
+          {pending ? <Loader2 size={12} className="animate-spin" /> : <Clock size={12} />}
+          Запази follow-up настройки
+        </button>
+      </div>
+    </form>
   );
 }
 

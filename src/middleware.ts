@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/api/auth"];
-const PUBLIC_API = ["/api/seed", "/api/reset", "/api/agent/tick"]; // protected by secret param
+const PUBLIC_API = ["/api/seed", "/api/reset", "/api/agent/tick", "/api/cron"]; // protected by secret param
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

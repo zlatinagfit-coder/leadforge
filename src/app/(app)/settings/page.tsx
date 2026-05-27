@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { Building2, Palette, Globe, Users, Mail, Sparkles } from "lucide-react";
-import { WorkspaceSettingsForm, InboxesPanel, TeamPanel, BrandingPanel } from "@/components/SettingsPanels";
+import { Building2, Palette, Globe, Users, Mail, Sparkles, Key, Clock } from "lucide-react";
+import { WorkspaceSettingsForm, InboxesPanel, TeamPanel, BrandingPanel, EmailConfigPanel, FollowupConfigPanel } from "@/components/SettingsPanels";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +30,11 @@ export default async function SettingsPage() {
         <nav className="space-y-0.5 sticky top-[80px] self-start">
           <SettingsNavLink Icon={Building2} label="Workspace"      href="#workspace" />
           <SettingsNavLink Icon={Palette}   label="Brandиране"     href="#branding" />
-          <SettingsNavLink Icon={Globe}     label="Custom domain"  href="#domain" />
+          <SettingsNavLink Icon={Key}       label="Свържи имейл"   href="#email" />
+          <SettingsNavLink Icon={Clock}     label="Follow-up"      href="#followup" />
           <SettingsNavLink Icon={Users}     label="Екип"           href="#team" />
           <SettingsNavLink Icon={Mail}      label="Sending inboxes" href="#inboxes" />
+          <SettingsNavLink Icon={Globe}     label="Custom domain"  href="#domain" />
         </nav>
 
         {/* Content */}
@@ -45,6 +47,16 @@ export default async function SettingsPage() {
           {/* BRANDING */}
           <Section id="branding" title="Brandиране (white-label)" subtitle="Клиентът вижда твоя бранд, не нашия.">
             <BrandingPanel accentColor={workspace.accentColor} />
+          </Section>
+
+          {/* EMAIL CONFIG — Resend credentials */}
+          <Section id="email" title="Свържи свой имейл" subtitle="Купи домейн + verify в Resend → изпращаш реални имейли към клиенти (не sandbox)">
+            <EmailConfigPanel workspace={{ resendApiKey: workspace.resendApiKey, resendFromEmail: workspace.resendFromEmail, resendFromName: workspace.resendFromName }} />
+          </Section>
+
+          {/* FOLLOW-UP CONFIG */}
+          <Section id="followup" title="Auto Follow-up sequences" subtitle="Ако lead не отговори след X часа → AI автоматично праща follow-up">
+            <FollowupConfigPanel workspace={{ followupEnabled: workspace.followupEnabled, followupDelayHours: workspace.followupDelayHours, followupMaxSteps: workspace.followupMaxSteps }} />
           </Section>
 
           {/* CUSTOM DOMAIN */}

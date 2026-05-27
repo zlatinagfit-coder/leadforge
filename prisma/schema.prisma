@@ -24,6 +24,16 @@ model Workspace {
   plan          String   @default("trial")
   monthlyQuota  Int      @default(500)
   usedThisMonth Int      @default(0)
+  // Per-workspace email infrastructure (encrypted in prod, plaintext for now)
+  resendApiKey  String?   // workspace's own Resend API key
+  resendFromEmail String? // workspace's own verified sender, e.g. hi@acme.bg
+  resendFromName  String?
+  gmailUser     String?   // Gmail SMTP user
+  gmailAppPassword String? // Gmail app password
+  // Follow-up sequence config
+  followupEnabled Boolean @default(true)
+  followupDelayHours Int  @default(72)
+  followupMaxSteps Int    @default(2)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -141,6 +151,24 @@ model Message {
   lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([campaignId, status])
+}
+
+// ===== FOLLOW-UPS =====
+
+model FollowUp {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  leadId       String
+  campaignId   String?
+  stepNumber   Int       // 1, 2, 3 in the sequence
+  scheduledFor DateTime  // when to send
+  status       String    @default("scheduled") // scheduled | sent | cancelled | failed
+  sentAt       DateTime?
+  errorMsg     String?
+  createdAt    DateTime  @default(now())
+
+  @@index([status, scheduledFor])
+  @@index([leadId])
 }
 
 // ===== INBOX =====

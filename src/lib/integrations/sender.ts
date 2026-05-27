@@ -24,11 +24,13 @@ export async function sendEmail(opts: {
   body: string;
   replyTo?: string;
   provider?: "resend" | "gmail" | "sendgrid";
+  /** Override Resend API key (for per-workspace credentials) */
+  apiKey?: string;
 }): Promise<SendResult> {
   const provider = opts.provider ?? "resend";
 
   if (provider === "resend") {
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKey = opts.apiKey || process.env.RESEND_API_KEY;
     if (!apiKey) {
       console.warn("⚠️  No RESEND_API_KEY — stub send");
       return { success: true, messageId: `stub-${Date.now()}` };
