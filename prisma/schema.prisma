@@ -41,6 +41,7 @@ model User {
   name          String?
   avatarUrl     String?
   emailVerified DateTime?
+  passwordHash  String?
   createdAt     DateTime     @default(now())
   memberships   Membership[]
   ownedLeads    Lead[]       @relation("LeadOwner")

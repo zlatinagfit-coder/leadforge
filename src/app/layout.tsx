@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, JetBrains_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
+import { SessionProvider } from "next-auth/react";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -37,7 +38,7 @@ export default function RootLayout({
       className={`${manrope.variable} ${mono.variable} ${serif.variable} antialiased`}
     >
       <body className="bg-bg text-ink min-h-screen" style={{ fontFamily: "var(--font-manrope), system-ui, sans-serif" }}>
-        {children}
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { BrandFull } from "./Brand";
 import { cn } from "@/lib/utils";
+import { UserMenu } from "./UserMenu";
 
 type NavItem = {
   href: string;
@@ -110,15 +111,7 @@ export function Sidebar({ workspaceName, userName, userEmail }: { workspaceName:
             <div className="h-full bg-red" style={{ width: "68%" }} />
           </div>
         </div>
-        <button className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface transition">
-          <div className="w-7 h-7 rounded-full grid place-items-center text-[11px] font-bold text-bg bg-gradient-to-br from-[#FFB347] to-[#E10C2F]">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <div className="leading-tight text-left flex-1 min-w-0">
-            <div className="text-[12.5px] font-semibold truncate">{userName}</div>
-            <div className="text-[10.5px] text-ink-4 truncate">{userEmail}</div>
-          </div>
-        </button>
+        <UserMenu userName={userName} userEmail={userEmail} />
       </div>
     </aside>
   );
