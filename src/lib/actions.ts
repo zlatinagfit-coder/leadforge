@@ -124,30 +124,40 @@ export async function sendOutreachToLeadAction(leadId: string) {
     return { success: false, error: `AI generate: ${(err as Error).message}` };
   }
 
-  // Pick sending inbox or fallback to env
-  const inbox = await prisma.sendingInbox.findFirst({
-    where: { workspaceId: workspace.id, warmedUp: true },
-    orderBy: { sentToday: "asc" },
-  });
-  const fromEmail = inbox?.fromEmail ?? process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-  const fromName = inbox?.fromName ?? process.env.RESEND_FROM_NAME ?? "LeadForge";
-
-  // Sandbox redirect: if no verified domain, Resend rejects sending to others
-  // We redirect to user.email so they can preview
+  // Always use env-configured sender (so no stale DB rows can break it)
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  const fromName = process.env.RESEND_FROM_NAME || "LeadForge";
   const ownerEmail = user.email;
-  const isSandbox = (fromEmail.endsWith("@resend.dev") || fromEmail === ownerEmail);
+  const inbox = await prisma.sendingInbox.findFirst({ where: { workspaceId: workspace.id } });
+
+  // Sandbox = sending domain is resend.dev (no verified domain yet)
+  let isSandbox = fromEmail.endsWith("@resend.dev");
   const actualRecipient = isSandbox ? ownerEmail : lead.email;
   const subjectPrefix = isSandbox ? `[ТЕСТ → ${lead.email}] ` : "";
 
-  const sendResult = await sendEmail({
+  let sendResult = await sendEmail({
     from: fromEmail,
     fromName,
     to: actualRecipient,
     subject: subjectPrefix + email.subject,
-    body: email.body + (isSandbox ? `\n\n---\n[Sandbox mode] Този имейл щеше да бъде изпратен до: ${lead.email}\nЗа да изпращаш реални имейли, verify-ни домейн в Resend.` : ""),
+    body: email.body + (isSandbox ? `\n\n---\n[Sandbox mode] Този имейл щеше да бъде изпратен до: ${lead.email}\nЗа да изпращаш реални имейли, verify-ни домейн в Resend и обнови RESEND_FROM_EMAIL.` : ""),
     replyTo: ownerEmail,
     provider: "resend",
   });
+
+  // Auto-fallback: if Resend rejects domain → retry as sandbox preview
+  if (!sendResult.success && sendResult.error?.toLowerCase().includes("domain")) {
+    isSandbox = true;
+    sendResult = await sendEmail({
+      from: "onboarding@resend.dev",
+      fromName,
+      to: ownerEmail,
+      subject: `[ТЕСТ → ${lead.email}] ${email.subject}`,
+      body: email.body + `\n\n---\n[Auto-sandbox fallback] Първият опит към ${lead.email} не успя защото домейнът ${fromEmail.split("@")[1]} не е verified в Resend. Преглеждаш версията тук.`,
+      replyTo: ownerEmail,
+      provider: "resend",
+    });
+  }
 
   // Persist a Message record so it shows up in inbox/leads history
   // Find or create a "Manual sends" campaign
@@ -326,22 +336,38 @@ export async function sendReplyAction(threadId: string, formData: FormData) {
   });
   if (!thread) return { success: false, error: "Thread not found" };
 
-  const inbox = await prisma.sendingInbox.findFirst({
-    where: { workspaceId: workspace.id, warmedUp: true },
-    orderBy: { sentToday: "asc" },
-  });
+  // Always use env-configured sender — auto sandbox-fallback if domain not verified
+  const user = await getCurrentUser();
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+  const fromName = process.env.RESEND_FROM_NAME || "LeadForge";
+  const inbox = await prisma.sendingInbox.findFirst({ where: { workspaceId: workspace.id } });
 
-  const fromEmail = inbox?.fromEmail ?? process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
-  const fromName = inbox?.fromName ?? process.env.RESEND_FROM_NAME ?? "LeadForge";
+  const isSandbox = fromEmail.endsWith("@resend.dev");
+  const actualTo = isSandbox ? user.email : thread.fromEmail;
+  const subjectPrefix = isSandbox ? `[ТЕСТ → ${thread.fromEmail}] ` : "";
 
-  const result = await sendEmail({
+  let result = await sendEmail({
     from: fromEmail,
     fromName,
-    to: thread.fromEmail,
-    subject: thread.subject.startsWith("Re:") ? thread.subject : `Re: ${thread.subject}`,
-    body,
+    to: actualTo,
+    subject: subjectPrefix + (thread.subject.startsWith("Re:") ? thread.subject : `Re: ${thread.subject}`),
+    body: body + (isSandbox ? `\n\n---\n[Sandbox] Истинският адресат щеше да е ${thread.fromEmail}.` : ""),
+    replyTo: user.email,
     provider: "resend",
   });
+
+  // Auto-fallback if Resend rejects domain
+  if (!result.success && result.error?.toLowerCase().includes("domain")) {
+    result = await sendEmail({
+      from: "onboarding@resend.dev",
+      fromName,
+      to: user.email,
+      subject: `[ТЕСТ → ${thread.fromEmail}] Re: ${thread.subject}`,
+      body: body + `\n\n---\n[Auto-sandbox] Първият опит към ${thread.fromEmail} не успя. Виж версия тук.`,
+      replyTo: user.email,
+      provider: "resend",
+    });
+  }
 
   // Log the message
   await prisma.inboxMessage.create({
