@@ -115,21 +115,44 @@ export default async function CampaignsPage() {
         })}
       </div>
 
-      {/* Empty state hint */}
-      <div className="mt-6 card p-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-red-soft grid place-items-center">
-            <Sparkles size={18} className="text-red" />
-          </div>
-          <div>
-            <div className="text-[14px] font-bold mb-0.5">AI препоръка</div>
-            <div className="text-[12px] text-ink-3">Виждам че ниша „Адвокати" има 24 нови lead-а без кампания. Препоръчвам да създадеш sequence сега.</div>
+      {/* Real AI recommendation — only show if there are leads in niches without active campaign */}
+      {await renderAIRecommendation(workspace.id)}
+    </div>
+  );
+}
+
+async function renderAIRecommendation(workspaceId: string) {
+  // Find niches with leads but no active campaign
+  const leadsByNiche = await prisma.lead.groupBy({
+    by: ["niche"],
+    where: { workspaceId },
+    _count: true,
+  });
+  const activeNiches = new Set(
+    (await prisma.campaign.findMany({ where: { workspaceId, status: "active", niche: { not: null } }, select: { niche: true } }))
+      .map((c) => c.niche)
+      .filter((n): n is string => !!n)
+  );
+
+  const orphanNiches = leadsByNiche.filter((g) => !activeNiches.has(g.niche) && g._count > 0);
+  if (orphanNiches.length === 0) return null;
+
+  const top = orphanNiches.sort((a, b) => b._count - a._count)[0];
+
+  return (
+    <div className="mt-6 card p-5 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-red-soft grid place-items-center">
+          <Sparkles size={18} className="text-red" />
+        </div>
+        <div>
+          <div className="text-[14px] font-bold mb-0.5">AI препоръка</div>
+          <div className="text-[12px] text-ink-3">
+            Имаш <strong>{top._count} lead-а</strong> в ниша „{top.niche}" без активна кампания. Препоръчвам да създадеш sequence сега.
           </div>
         </div>
-        <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg bg-ink text-bg text-[12.5px] font-semibold hover:bg-ink-2 transition">
-          <Plus size={13} /> Създай от AI
-        </button>
       </div>
+      <NewCampaignButton />
     </div>
   );
 }

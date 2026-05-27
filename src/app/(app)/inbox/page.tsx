@@ -3,6 +3,7 @@ import { getCurrentWorkspace } from "@/lib/workspace";
 import { timeAgoBg } from "@/lib/utils";
 import { Inbox as InboxIcon, Flame, Sparkles, Archive, Send, Reply, CheckCheck, Star } from "lucide-react";
 import { ReplyBox } from "@/components/ReplyBox";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -14,16 +15,29 @@ const INTENT_BADGE: Record<string, { label: string; bg: string; color: string }>
   auto_reply:      { label: "Auto-reply",      bg: "var(--surface)",    color: "var(--ink-4)" },
 };
 
-export default async function InboxPage() {
+type SP = Promise<{ filter?: string; thread?: string }>;
+
+export default async function InboxPage({ searchParams }: { searchParams: SP }) {
+  const { filter = "all", thread: threadId } = await searchParams;
   const workspace = await getCurrentWorkspace();
-  const threads = await prisma.inboxThread.findMany({
+  const allThreads = await prisma.inboxThread.findMany({
     where: { workspaceId: workspace.id },
     include: { messages: { orderBy: { at: "asc" } }, lead: true },
     orderBy: { lastAt: "desc" },
   });
 
-  // Active thread = first hot/unread one
-  const activeThread = threads.find((t) => t.unread && t.intent === "hot") ?? threads[0];
+  // Apply filter
+  const threads = filter === "hot"
+    ? allThreads.filter((t) => t.intent === "hot")
+    : filter === "unread"
+    ? allThreads.filter((t) => t.unread)
+    : allThreads;
+
+  // Active thread = explicit param OR first hot/unread one
+  const activeThread =
+    (threadId && allThreads.find((t) => t.id === threadId)) ||
+    threads.find((t) => t.unread && t.intent === "hot") ||
+    threads[0];
 
   return (
     <div className="flex h-[calc(100vh-52px)]">
@@ -34,24 +48,36 @@ export default async function InboxPage() {
             <InboxIcon size={15} className="text-ink-3" />
             <span className="text-[13px] font-bold">Inbox</span>
             <span className="text-[10.5px] mono px-1.5 py-px rounded-full bg-red text-bg font-bold">
-              {threads.filter((t) => t.unread).length}
+              {allThreads.filter((t) => t.unread).length}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <button className="text-[11px] mono px-2 py-1 rounded text-ink-3 hover:bg-surface flex items-center gap-1">
+            <Link href="/inbox?filter=hot" className={`text-[11px] mono px-2 py-1 rounded flex items-center gap-1 transition ${filter === "hot" ? "bg-red-soft text-red font-bold" : "text-ink-3 hover:bg-surface"}`}>
               <Flame size={11} /> Hot
-            </button>
-            <button className="text-[11px] mono px-2 py-1 rounded text-ink-3 hover:bg-surface">Всички</button>
+            </Link>
+            <Link href="/inbox?filter=unread" className={`text-[11px] mono px-2 py-1 rounded transition ${filter === "unread" ? "bg-ink text-bg font-bold" : "text-ink-3 hover:bg-surface"}`}>
+              Непрочетени
+            </Link>
+            <Link href="/inbox" className={`text-[11px] mono px-2 py-1 rounded transition ${filter === "all" ? "bg-ink text-bg font-bold" : "text-ink-3 hover:bg-surface"}`}>
+              Всички
+            </Link>
           </div>
         </div>
         <ul className="flex-1 overflow-y-auto divide-y divide-line">
+          {threads.length === 0 && (
+            <li className="p-6 text-center text-[12.5px] text-ink-4">
+              Няма {filter === "hot" ? "hot" : filter === "unread" ? "непрочетени" : ""} threads. Изпрати outreach имейл и чакай отговор.
+            </li>
+          )}
           {threads.map((t) => {
             const isActive = t.id === activeThread?.id;
             const badge = t.intent ? INTENT_BADGE[t.intent] : null;
+            const href = `/inbox?${filter !== "all" ? `filter=${filter}&` : ""}thread=${t.id}`;
             return (
-              <li
+              <Link
                 key={t.id}
-                className={`px-4 py-3 cursor-pointer transition border-l-2 ${
+                href={href}
+                className={`block px-4 py-3 cursor-pointer transition border-l-2 ${
                   isActive ? "bg-surface border-l-red" : "border-l-transparent hover:bg-surface"
                 }`}
               >
@@ -79,13 +105,24 @@ export default async function InboxPage() {
                   </div>
                   {t.unread && <span className="w-2 h-2 rounded-full bg-red shrink-0 mt-2" />}
                 </div>
-              </li>
+              </Link>
             );
           })}
         </ul>
       </div>
 
       {/* Thread view */}
+      {!activeThread && (
+        <div className="flex-1 flex items-center justify-center min-w-0">
+          <div className="text-center max-w-[320px]">
+            <div className="w-12 h-12 rounded-xl bg-red-soft grid place-items-center mx-auto mb-3">
+              <InboxIcon size={20} className="text-red" />
+            </div>
+            <h3 className="text-[16px] font-bold mb-1">Inbox-ът е празен</h3>
+            <p className="text-[12.5px] text-ink-3">Изпрати outreach имейл от Lead-ове и чакай отговор. AI автоматично класифицира всеки reply.</p>
+          </div>
+        </div>
+      )}
       {activeThread && (
         <div className="flex-1 flex flex-col min-w-0">
           {/* Thread header */}

@@ -417,6 +417,100 @@ export async function markThreadReadAction(threadId: string) {
 }
 
 // ============================================================
+// WORKSPACE / SETTINGS — update workspace + sending inboxes
+// ============================================================
+
+export async function updateWorkspaceAction(formData: FormData) {
+  const workspace = await getCurrentWorkspace();
+  const name = formData.get("name")?.toString().trim();
+  const slug = formData.get("slug")?.toString().trim();
+  const accentColor = formData.get("accentColor")?.toString().trim();
+
+  if (!name) return { success: false, error: "Името е задължително" };
+
+  await prisma.workspace.update({
+    where: { id: workspace.id },
+    data: {
+      name,
+      ...(slug && { slug }),
+      ...(accentColor && { accentColor }),
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function addSendingInboxAction(formData: FormData) {
+  const workspace = await getCurrentWorkspace();
+  const label = formData.get("label")?.toString().trim() ?? "";
+  const fromEmail = formData.get("fromEmail")?.toString().trim() ?? "";
+  const fromName = formData.get("fromName")?.toString().trim() ?? "";
+  const provider = formData.get("provider")?.toString().trim() ?? "resend";
+
+  if (!label || !fromEmail || !fromName) return { success: false, error: "Всички полета са задължителни" };
+
+  await prisma.sendingInbox.create({
+    data: { workspaceId: workspace.id, label, fromEmail, fromName, provider, dailyLimit: 50, warmedUp: false, health: 100 },
+  });
+
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function deleteSendingInboxAction(inboxId: string) {
+  const workspace = await getCurrentWorkspace();
+  await prisma.sendingInbox.deleteMany({ where: { id: inboxId, workspaceId: workspace.id } });
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function inviteMemberAction(formData: FormData) {
+  const workspace = await getCurrentWorkspace();
+  const email = formData.get("email")?.toString().trim() ?? "";
+  const name = formData.get("name")?.toString().trim() ?? "";
+  const role = formData.get("role")?.toString().trim() ?? "member";
+
+  if (!email) return { success: false, error: "Email е задължителен" };
+
+  // Find or create user
+  let user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    user = await prisma.user.create({ data: { email, name: name || email.split("@")[0] } });
+  }
+
+  // Check if already a member
+  const existingMembership = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId: user.id, workspaceId: workspace.id } },
+  });
+  if (existingMembership) return { success: false, error: "Този потребител вече е член" };
+
+  await prisma.membership.create({
+    data: { userId: user.id, workspaceId: workspace.id, role },
+  });
+
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+export async function removeMemberAction(membershipId: string) {
+  const workspace = await getCurrentWorkspace();
+  // Don't allow removing the only owner
+  const membership = await prisma.membership.findFirst({ where: { id: membershipId, workspaceId: workspace.id } });
+  if (!membership) return { success: false, error: "Not found" };
+
+  if (membership.role === "owner") {
+    const ownerCount = await prisma.membership.count({ where: { workspaceId: workspace.id, role: "owner" } });
+    if (ownerCount === 1) return { success: false, error: "Не можеш да премахнеш единствения owner" };
+  }
+
+  await prisma.membership.delete({ where: { id: membershipId } });
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+// ============================================================
 // AGENT — natural-language prompt → scraping action
 // ============================================================
 

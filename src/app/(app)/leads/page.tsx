@@ -1,29 +1,50 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { STATUS_META, NICHE_META, formatNumber, timeAgoBg } from "@/lib/utils";
-import { Filter, Download, Search, Plus, Sparkles, Globe, Mail, Phone, MapPin, Linkedin, Instagram, MoreHorizontal } from "lucide-react";
+import { Download, Search, Plus, Sparkles, Globe, Mail, Phone, MapPin, MoreHorizontal, Linkedin, Instagram } from "lucide-react";
 import { FindNewLeadsButton } from "@/components/FindNewLeadsButton";
 import { LeadStatusDropdown } from "@/components/LeadStatusDropdown";
 import { SendOutreachButton } from "@/components/SendOutreachButton";
+import { LeadsToolbar } from "@/components/LeadsToolbar";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function LeadsPage() {
+type SearchParams = Promise<{ status?: string; q?: string; niche?: string }>;
+
+export default async function LeadsPage({ searchParams }: { searchParams: SearchParams }) {
+  const { status, q, niche } = await searchParams;
   const workspace = await getCurrentWorkspace();
-  const leads = await prisma.lead.findMany({
+
+  const allLeads = await prisma.lead.findMany({
     where: { workspaceId: workspace.id },
     include: { owner: true },
     orderBy: [{ score: "desc" }, { createdAt: "desc" }],
   });
 
+  // Apply filters
+  const search = (q ?? "").toLowerCase().trim();
+  const leads = allLeads.filter((l) => {
+    if (status && status !== "all" && l.status !== status) return false;
+    if (niche && l.niche !== niche) return false;
+    if (search) {
+      const hay = `${l.company} ${l.email ?? ""} ${l.website ?? ""} ${l.city ?? ""}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
   const counts = {
-    total: leads.length,
-    new: leads.filter((l) => l.status === "new").length,
-    contacted: leads.filter((l) => l.status === "contacted").length,
-    replied: leads.filter((l) => l.status === "replied").length,
-    interested: leads.filter((l) => l.status === "interested").length,
-    meeting: leads.filter((l) => l.status === "meeting").length,
+    total: allLeads.length,
+    new: allLeads.filter((l) => l.status === "new").length,
+    contacted: allLeads.filter((l) => l.status === "contacted").length,
+    replied: allLeads.filter((l) => l.status === "replied").length,
+    interested: allLeads.filter((l) => l.status === "interested").length,
+    meeting: allLeads.filter((l) => l.status === "meeting").length,
   };
+
+  const niches = [...new Set(allLeads.map((l) => l.niche))].filter(Boolean);
+  const activeStatus = status ?? "all";
 
   return (
     <div className="p-8 max-w-[1400px] mx-auto">
@@ -35,43 +56,48 @@ export default async function LeadsPage() {
           <p className="text-[13px] text-ink-3">Всеки lead е намерен от AI, проверен, scored и готов за outreach.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg border border-line text-[12.5px] font-semibold text-ink-2 hover:bg-surface transition">
-            <Download size={13} /> Експортирай CSV
-          </button>
           <FindNewLeadsButton />
         </div>
       </div>
 
-      {/* Status tabs */}
-      <div className="flex items-center gap-1 mb-5 border-b border-line">
-        <TabBtn label="Всички" count={counts.total} active />
-        <TabBtn label="Нови"            count={counts.new}        color={STATUS_META.new.color} />
-        <TabBtn label="Контактирани"    count={counts.contacted}  color={STATUS_META.contacted.color} />
-        <TabBtn label="Отговорили"      count={counts.replied}    color={STATUS_META.replied.color} />
-        <TabBtn label="Заинтересовани"  count={counts.interested} color={STATUS_META.interested.color} />
-        <TabBtn label="Срещи"           count={counts.meeting}    color={STATUS_META.meeting.color} />
+      {/* Status tabs — functional via URL params */}
+      <div className="flex items-center gap-1 mb-5 border-b border-line overflow-x-auto">
+        <TabLink label="Всички" count={counts.total} status="all" active={activeStatus === "all"} />
+        <TabLink label="Нови"            count={counts.new}        status="new"        active={activeStatus === "new"}        color={STATUS_META.new.color} />
+        <TabLink label="Контактирани"    count={counts.contacted}  status="contacted"  active={activeStatus === "contacted"}  color={STATUS_META.contacted.color} />
+        <TabLink label="Отговорили"      count={counts.replied}    status="replied"    active={activeStatus === "replied"}    color={STATUS_META.replied.color} />
+        <TabLink label="Заинтересовани"  count={counts.interested} status="interested" active={activeStatus === "interested"} color={STATUS_META.interested.color} />
+        <TabLink label="Срещи"           count={counts.meeting}    status="meeting"    active={activeStatus === "meeting"}    color={STATUS_META.meeting.color} />
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative flex-1 max-w-[320px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-4" />
-          <input placeholder="Търси по име, домейн, имейл..." className="w-full h-9 pl-9 pr-3 rounded-lg bg-surface border border-line text-[13px] placeholder:text-ink-4 focus:outline-none focus:border-ink-5" />
+      {/* Toolbar — search + niche filter */}
+      <LeadsToolbar niches={niches} currentNiche={niche} currentSearch={q} resultCount={leads.length} totalCount={allLeads.length} />
+
+      {/* Empty state */}
+      {allLeads.length === 0 && (
+        <div className="card p-12 text-center">
+          <div className="w-12 h-12 rounded-xl bg-red-soft grid place-items-center mx-auto mb-3">
+            <Sparkles size={20} className="text-red" />
+          </div>
+          <h3 className="text-[18px] font-bold mb-1">Все още няма lead-ове</h3>
+          <p className="text-[13px] text-ink-3 mb-4 max-w-[400px] mx-auto">
+            Кликни „Намери нови" за да започнеш скрейпване на Google Maps. AI ще намери, анализира и обогати lead-овете автоматично.
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <FindNewLeadsButton />
+          </div>
         </div>
-        <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg border border-line text-[12.5px] font-semibold text-ink-2 hover:bg-surface">
-          <Filter size={13} /> Ниша
-        </button>
-        <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg border border-line text-[12.5px] font-semibold text-ink-2 hover:bg-surface">
-          <Filter size={13} /> Държава
-        </button>
-        <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg border border-line text-[12.5px] font-semibold text-ink-2 hover:bg-surface">
-          <Filter size={13} /> Score
-        </button>
-        <div className="flex-1" />
-        <div className="text-[11.5px] mono text-ink-4">{leads.length} от {leads.length}</div>
-      </div>
+      )}
+
+      {/* No results with current filters */}
+      {allLeads.length > 0 && leads.length === 0 && (
+        <div className="card p-8 text-center">
+          <p className="text-[13px] text-ink-3">Няма lead-ове отговарящи на филтрите.</p>
+        </div>
+      )}
 
       {/* Table */}
+      {leads.length > 0 && (
       <div className="card overflow-hidden">
         <table className="w-full text-[13px]">
           <thead>
@@ -181,18 +207,20 @@ export default async function LeadsPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
 
-function TabBtn({ label, count, active = false, color }: { label: string; count: number; active?: boolean; color?: string }) {
+function TabLink({ label, count, status, active = false, color }: { label: string; count: number; status: string; active?: boolean; color?: string }) {
+  const href = status === "all" ? "/leads" : `/leads?status=${status}`;
   return (
-    <button className={`relative h-10 px-4 flex items-center gap-2 text-[13px] font-semibold transition ${active ? "text-ink" : "text-ink-3 hover:text-ink"}`}>
+    <Link href={href} className={`relative h-10 px-4 flex items-center gap-2 text-[13px] font-semibold whitespace-nowrap transition ${active ? "text-ink" : "text-ink-3 hover:text-ink"}`}>
       {color && <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />}
       <span>{label}</span>
       <span className="text-[10.5px] mono text-ink-4">{count}</span>
       {active && <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-red" />}
-    </button>
+    </Link>
   );
 }
 
