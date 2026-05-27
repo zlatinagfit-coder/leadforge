@@ -27,7 +27,7 @@ export async function scrapeNewLeadsAction(formData: FormData) {
 
   let scraped: Awaited<ReturnType<typeof scrapeGoogleMaps>> = [];
   try {
-    scraped = await scrapeGoogleMaps(query, limit);
+    scraped = await scrapeGoogleMaps(query, limit, { apifyToken: workspace.apifyToken ?? undefined });
   } catch (err) {
     await prisma.aiActivity.create({
       data: { workspaceId: workspace.id, kind: "error", tag: "Scraper", text: `Apify грешка: ${(err as Error).message.slice(0, 200)}` },
@@ -58,10 +58,10 @@ export async function scrapeNewLeadsAction(formData: FormData) {
     });
     if (existing) continue;
 
-    const emails = await findEmailsForDomain(domain);
+    const emails = await findEmailsForDomain(domain, { hunterApiKey: workspace.hunterApiKey ?? undefined });
     const bestEmail = emails.sort((a, b) => b.confidence - a.confidence)[0];
 
-    const analysis = await analyzeWebsite(`https://${domain}`);
+    const analysis = await analyzeWebsite(`https://${domain}`, { openaiApiKey: workspace.openaiApiKey ?? undefined });
 
     const lead = await prisma.lead.create({
       data: {
@@ -129,6 +129,7 @@ export async function sendOutreachToLeadAction(leadId: string) {
       painPoints: pains.length > 0 ? pains : ["Слаб онлайн funnel", "Няма retargeting"],
       senderName: user.name ?? "Екипът",
       language: "bg",
+      openaiApiKey: workspace.openaiApiKey ?? undefined,
     });
   } catch (err) {
     return { success: false, error: `AI generate: ${(err as Error).message}` };
@@ -274,7 +275,7 @@ export async function reanalyzeLeadAction(leadId: string) {
     data: { workspaceId: workspace.id, kind: "analyze", tag: "Analyzer", text: `Преанализирам ${lead.company}...` },
   });
 
-  const analysis = await analyzeWebsite(`https://${lead.website}`);
+  const analysis = await analyzeWebsite(`https://${lead.website}`, { openaiApiKey: workspace.openaiApiKey ?? undefined });
   const painPoints = analysis.painPoints.length > 0 ? analysis.painPoints : analysis.weaknesses.slice(0, 5);
 
   await prisma.lead.update({
@@ -404,6 +405,7 @@ export async function generateAiReplyAction(threadId: string): Promise<{ success
       painPoints: thread.lead?.painPoints ? JSON.parse(thread.lead.painPoints) : [],
       senderName: user.name ?? "Екип",
       language: "bg",
+      openaiApiKey: workspace.openaiApiKey ?? undefined,
     });
 
     return { success: true, reply: body };
@@ -528,32 +530,79 @@ export async function updateWorkspaceAction(formData: FormData) {
   return { success: true };
 }
 
-export async function updateEmailConfigAction(formData: FormData) {
+/**
+ * Updates ALL API keys for the workspace + tests each one.
+ * Returns per-key status so UI can show ✓ или ✗ срещу всеки.
+ */
+export async function updateApiKeysAction(formData: FormData) {
   const workspace = await getCurrentWorkspace();
+
+  const openaiApiKey = formData.get("openaiApiKey")?.toString().trim() || null;
+  const apifyToken = formData.get("apifyToken")?.toString().trim() || null;
+  const hunterApiKey = formData.get("hunterApiKey")?.toString().trim() || null;
   const resendApiKey = formData.get("resendApiKey")?.toString().trim() || null;
   const resendFromEmail = formData.get("resendFromEmail")?.toString().trim().toLowerCase() || null;
   const resendFromName = formData.get("resendFromName")?.toString().trim() || null;
 
-  // Validate API key format if provided
-  if (resendApiKey && !resendApiKey.startsWith("re_")) {
-    return { success: false, error: "Resend API ключът трябва да започва с 're_'" };
-  }
+  const results: Record<string, { ok: boolean; error?: string }> = {};
 
-  // Test the API key
-  if (resendApiKey) {
-    try {
-      const res = await fetch("https://api.resend.com/domains", {
-        headers: { Authorization: `Bearer ${resendApiKey}` },
-      });
-      if (!res.ok) return { success: false, error: `Resend отказа ключа (HTTP ${res.status})` };
-    } catch {
-      return { success: false, error: "Не успях да проверя ключа — провери Resend connection" };
+  // 1. OpenAI
+  if (openaiApiKey) {
+    if (!openaiApiKey.startsWith("sk-")) {
+      results.openai = { ok: false, error: "OpenAI ключът трябва да започва с 'sk-'" };
+    } else {
+      try {
+        const res = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${openaiApiKey}` } });
+        results.openai = res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
+      } catch (e) { results.openai = { ok: false, error: (e as Error).message }; }
     }
   }
 
+  // 2. Apify
+  if (apifyToken) {
+    if (!apifyToken.startsWith("apify_api_")) {
+      results.apify = { ok: false, error: "Apify токенът трябва да започва с 'apify_api_'" };
+    } else {
+      try {
+        const res = await fetch(`https://api.apify.com/v2/users/me?token=${apifyToken}`);
+        results.apify = res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
+      } catch (e) { results.apify = { ok: false, error: (e as Error).message }; }
+    }
+  }
+
+  // 3. Hunter (optional)
+  if (hunterApiKey) {
+    try {
+      const res = await fetch(`https://api.hunter.io/v2/account?api_key=${hunterApiKey}`);
+      results.hunter = res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
+    } catch (e) { results.hunter = { ok: false, error: (e as Error).message }; }
+  }
+
+  // 4. Resend
+  if (resendApiKey) {
+    if (!resendApiKey.startsWith("re_")) {
+      results.resend = { ok: false, error: "Resend ключът трябва да започва с 're_'" };
+    } else {
+      try {
+        const res = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${resendApiKey}` } });
+        results.resend = res.ok ? { ok: true } : { ok: false, error: `HTTP ${res.status}` };
+      } catch (e) { results.resend = { ok: false, error: (e as Error).message }; }
+    }
+  }
+
+  // Stop if any required key failed validation
+  const hasInvalidRequired = (results.openai?.ok === false) || (results.apify?.ok === false) || (results.resend?.ok === false);
+  if (hasInvalidRequired) {
+    return { success: false, results, error: "Един или повече ключове са невалидни — виж детайлите по-долу." };
+  }
+
+  // Save (set to null if cleared)
   await prisma.workspace.update({
     where: { id: workspace.id },
     data: {
+      openaiApiKey,
+      apifyToken,
+      hunterApiKey,
       resendApiKey,
       resendFromEmail,
       resendFromName,
@@ -561,8 +610,12 @@ export async function updateEmailConfigAction(formData: FormData) {
   });
 
   revalidatePath("/settings");
-  return { success: true };
+  revalidatePath("/");
+  return { success: true, results };
 }
+
+/** Legacy alias for backward compat */
+export const updateEmailConfigAction = updateApiKeysAction;
 
 export async function updateFollowupConfigAction(formData: FormData) {
   const workspace = await getCurrentWorkspace();
@@ -664,9 +717,9 @@ export async function runAgentPromptAction(promptText: string) {
     data: { workspaceId: workspace.id, kind: "compose", tag: "Agent", text: `Промпт от потребителя: "${prompt.slice(0, 120)}"` },
   });
 
-  const openaiKey = process.env.OPENAI_API_KEY;
+  const openaiKey = workspace.openaiApiKey || process.env.OPENAI_API_KEY;
   if (!openaiKey) {
-    return { success: false, error: "OPENAI_API_KEY missing — cannot parse prompts" };
+    return { success: false, error: "Свържи OpenAI API ключ в Настройки → API ключове" };
   }
 
   // Use OpenAI to extract structured params

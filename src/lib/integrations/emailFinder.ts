@@ -21,8 +21,8 @@ export type FoundEmail = {
   position?: string;
 };
 
-export async function findEmailsForDomain(domain: string): Promise<FoundEmail[]> {
-  const hunterKey = process.env.HUNTER_API_KEY;
+export async function findEmailsForDomain(domain: string, options?: { hunterApiKey?: string }): Promise<FoundEmail[]> {
+  const hunterKey = options?.hunterApiKey || process.env.HUNTER_API_KEY;
 
   // 1. Hunter.io path
   if (hunterKey) {

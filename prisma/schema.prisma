@@ -24,11 +24,14 @@ model Workspace {
   plan          String   @default("trial")
   monthlyQuota  Int      @default(500)
   usedThisMonth Int      @default(0)
-  // Per-workspace email infrastructure (encrypted in prod, plaintext for now)
-  resendApiKey  String?   // workspace's own Resend API key
-  resendFromEmail String? // workspace's own verified sender, e.g. hi@acme.bg
+  // Per-workspace API infrastructure (client brings own keys — robot is THEIRS)
+  openaiApiKey  String?   // for AI analysis + compose + parsing
+  apifyToken    String?   // for Google Maps scraping
+  hunterApiKey  String?   // optional, for premium email finding
+  resendApiKey  String?   // for sending emails
+  resendFromEmail String? // verified sender, e.g. hi@client.com
   resendFromName  String?
-  gmailUser     String?   // Gmail SMTP user
+  gmailUser     String?   // Gmail SMTP user (alternative to Resend)
   gmailAppPassword String? // Gmail app password
   // Follow-up sequence config
   followupEnabled Boolean @default(true)

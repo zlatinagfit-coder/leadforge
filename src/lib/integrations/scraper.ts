@@ -36,8 +36,8 @@ type ApifyMapsResult = {
  * @param query e.g. "dentists in London" or "fitness studios Berlin"
  * @param limit max number of businesses (default 25)
  */
-export async function scrapeGoogleMaps(query: string, limit = 25): Promise<ScrapedBusiness[]> {
-  const token = process.env.APIFY_TOKEN;
+export async function scrapeGoogleMaps(query: string, limit = 25, options?: { apifyToken?: string }): Promise<ScrapedBusiness[]> {
+  const token = options?.apifyToken || process.env.APIFY_TOKEN;
   if (!token) {
     console.warn("⚠️  APIFY_TOKEN missing — returning empty results");
     return [];

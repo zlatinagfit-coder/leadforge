@@ -36,8 +36,8 @@ const FALLBACK_ANALYSIS: WebsiteAnalysis = {
   summary: "Сайтът беше недостъпен по време на анализа.",
 };
 
-export async function analyzeWebsite(url: string): Promise<WebsiteAnalysis> {
-  const openaiKey = process.env.OPENAI_API_KEY;
+export async function analyzeWebsite(url: string, options?: { openaiApiKey?: string }): Promise<WebsiteAnalysis> {
+  const openaiKey = options?.openaiApiKey || process.env.OPENAI_API_KEY;
 
   if (!url || !url.trim()) {
     return { ...FALLBACK_ANALYSIS, hasWebsite: false, weaknesses: ["Няма уебсайт"], summary: "Този бизнес не предоставя уебсайт." };
@@ -138,8 +138,9 @@ export async function generateOutreach(opts: {
   painPoints: string[];
   senderName: string;
   language?: "bg" | "en";
+  openaiApiKey?: string;
 }): Promise<PersonalizedEmail> {
-  const openaiKey = process.env.OPENAI_API_KEY;
+  const openaiKey = opts.openaiApiKey || process.env.OPENAI_API_KEY;
   const lang = opts.language ?? "bg";
 
   if (!openaiKey) {
@@ -193,8 +194,8 @@ export async function generateOutreach(opts: {
   }
 }
 
-export async function classifyReply(replyText: string): Promise<{ intent: string; sentiment: string }> {
-  const openaiKey = process.env.OPENAI_API_KEY;
+export async function classifyReply(replyText: string, options?: { openaiApiKey?: string }): Promise<{ intent: string; sentiment: string }> {
+  const openaiKey = options?.openaiApiKey || process.env.OPENAI_API_KEY;
   if (!openaiKey) return { intent: "interested", sentiment: "neutral" };
 
   const prompt = `Класифицирай този email отговор. Върни JSON:

@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
         painPoints: pains,
         senderName: owner?.name ?? "Екип",
         language: "bg",
+        openaiApiKey: workspace.openaiApiKey ?? undefined,
       });
 
       // Add follow-up context to subject + body
