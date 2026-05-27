@@ -1,0 +1,217 @@
+// LeadForge — Multi-tenant lead generation SaaS
+// White-label dashboard for agencies (Crimson theme)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== TENANCY =====
+
+model Workspace {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  // White-label branding
+  logoUrl       String?
+  accentColor   String   @default("#E10C2F")
+  customDomain  String?
+  // Plan & limits
+  plan          String   @default("trial")
+  monthlyQuota  Int      @default(500)
+  usedThisMonth Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  members   Membership[]
+  leads     Lead[]
+  campaigns Campaign[]
+  threads   InboxThread[]
+  activity  AiActivity[]
+  inboxes   SendingInbox[]
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  avatarUrl     String?
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+  memberships   Membership[]
+  ownedLeads    Lead[]       @relation("LeadOwner")
+}
+
+model Membership {
+  id          String    @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String    @default("member")
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+// ===== LEADS =====
+
+model Lead {
+  id          String    @id @default(cuid())
+  workspaceId String
+  company     String
+  niche       String
+  city        String?
+  country     String?
+  website     String?
+  email       String?
+  phone       String?
+  linkedin    String?
+  instagram   String?
+  industry    String?
+  employees   String?
+  revenue     String?
+  score       Int       @default(0)
+  painPoints  String?
+  status      String    @default("new")
+  ownerId     String?
+  source      String    @default("ai_scrape")
+  lastTouchAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     User?         @relation("LeadOwner", fields: [ownerId], references: [id])
+  messages  Message[]
+  threads   InboxThread[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, score])
+}
+
+// ===== CAMPAIGNS =====
+
+model Campaign {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  niche          String?
+  status         String   @default("draft")
+  targetCity     String?
+  targetCountry  String?
+  targetIndustry String?
+  sequence       String   @default("[]")
+  sent           Int      @default(0)
+  opened         Int      @default(0)
+  replied        Int      @default(0)
+  meetings       Int      @default(0)
+  health         Int      @default(100)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([workspaceId, status])
+}
+
+model Message {
+  id         String    @id @default(cuid())
+  campaignId String
+  leadId     String
+  stepIndex  Int       @default(0)
+  subject    String
+  body       String
+  status     String    @default("queued")
+  sentAt     DateTime?
+  openedAt   DateTime?
+  repliedAt  DateTime?
+  errorMsg   String?
+  createdAt  DateTime  @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  lead     Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+}
+
+// ===== INBOX =====
+
+model InboxThread {
+  id          String   @id @default(cuid())
+  workspaceId String
+  leadId      String?
+  fromName    String?
+  fromEmail   String
+  fromCompany String?
+  subject     String
+  lastPreview String
+  lastAt      DateTime @default(now())
+  unread      Boolean  @default(true)
+  sentiment   String?
+  intent      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead?          @relation(fields: [leadId], references: [id])
+  messages  InboxMessage[]
+
+  @@index([workspaceId, unread])
+}
+
+model InboxMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  direction String
+  fromEmail String
+  toEmail   String
+  subject   String
+  body      String
+  at        DateTime @default(now())
+
+  thread InboxThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+// ===== AI ACTIVITY FEED =====
+
+model AiActivity {
+  id          String   @id @default(cuid())
+  workspaceId String
+  kind        String
+  tag         String
+  text        String
+  meta        String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
+
+// ===== SENDING INFRASTRUCTURE =====
+
+model SendingInbox {
+  id          String   @id @default(cuid())
+  workspaceId String
+  label       String
+  provider    String
+  fromEmail   String
+  fromName    String
+  apiKey      String?
+  smtpHost    String?
+  smtpPort    Int?
+  smtpUser    String?
+  smtpPass    String?
+  dailyLimit  Int      @default(50)
+  sentToday   Int      @default(0)
+  warmedUp    Boolean  @default(false)
+  health      Int      @default(100)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
