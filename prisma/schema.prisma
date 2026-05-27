@@ -77,6 +77,9 @@ model Lead {
   revenue     String?
   score       Int       @default(0)
   painPoints  String?
+  // Rich analysis JSON: { hasWebsite, strengths[], weaknesses[], usagePatterns[], funnelGaps[], techStack[], summary }
+  analysis    String?
+  notes       String?
   status      String    @default("new")
   ownerId     String?
   source      String    @default("ai_scrape")

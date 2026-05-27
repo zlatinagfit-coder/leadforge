@@ -6,6 +6,7 @@ import { FindNewLeadsButton } from "@/components/FindNewLeadsButton";
 import { LeadStatusDropdown } from "@/components/LeadStatusDropdown";
 import { SendOutreachButton } from "@/components/SendOutreachButton";
 import { LeadsToolbar } from "@/components/LeadsToolbar";
+import { LeadRowTrigger } from "@/components/LeadRowTrigger";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -194,11 +195,24 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
                     {lead.lastTouchAt ? timeAgoBg(lead.lastTouchAt) : "—"}
                   </td>
                   <td className="py-3 px-3">
-                    <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
+                    <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition">
+                      <LeadRowTrigger lead={{
+                        id: lead.id,
+                        company: lead.company,
+                        niche: lead.niche,
+                        city: lead.city,
+                        country: lead.country,
+                        website: lead.website,
+                        email: lead.email,
+                        phone: lead.phone,
+                        score: lead.score,
+                        status: lead.status,
+                        industry: lead.industry,
+                        painPoints: lead.painPoints,
+                        analysis: lead.analysis,
+                        notes: lead.notes,
+                      }} />
                       <SendOutreachButton leadId={lead.id} leadEmail={lead.email} leadCompany={lead.company} />
-                      <button className="w-7 h-7 grid place-items-center rounded-md hover:bg-line" title="Още">
-                        <MoreHorizontal size={13} className="text-ink-3" />
-                      </button>
                     </div>
                   </td>
                 </tr>

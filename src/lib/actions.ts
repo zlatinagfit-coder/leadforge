@@ -75,6 +75,16 @@ export async function scrapeNewLeadsAction(formData: FormData) {
         phone: biz.phone,
         score: analysis.score,
         painPoints: JSON.stringify(analysis.painPoints),
+        analysis: JSON.stringify({
+          hasWebsite: analysis.hasWebsite,
+          websiteReachable: analysis.websiteReachable,
+          strengths: analysis.strengths,
+          weaknesses: analysis.weaknesses,
+          usagePatterns: analysis.usagePatterns,
+          funnelGaps: analysis.funnelGaps,
+          techStack: analysis.techStack,
+          summary: analysis.summary,
+        }),
         industry: analysis.industry,
         source: "ai_scrape",
       },
@@ -82,7 +92,7 @@ export async function scrapeNewLeadsAction(formData: FormData) {
     created.push(lead);
 
     await prisma.aiActivity.create({
-      data: { workspaceId: workspace.id, kind: "analyze", tag: "Analyzer", text: `${biz.name} · score ${analysis.score} · ${analysis.painPoints.length} pain points` },
+      data: { workspaceId: workspace.id, kind: "analyze", tag: "Analyzer", text: `${biz.name} · score ${analysis.score} · ${analysis.strengths.length}↑ ${analysis.weaknesses.length}↓` },
     });
   }
 
@@ -226,6 +236,60 @@ export async function sendOutreachToLeadAction(leadId: string) {
     intendedRecipient: lead.email,
     subject: email.subject,
   };
+}
+
+/**
+ * Re-runs AI website analysis for an existing lead.
+ * Useful when the lead has stale or empty analysis data.
+ */
+export async function reanalyzeLeadAction(leadId: string) {
+  const workspace = await getCurrentWorkspace();
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, workspaceId: workspace.id } });
+  if (!lead) return { success: false, error: "Lead not found" };
+  if (!lead.website) return { success: false, error: "Lead няма уебсайт за анализ" };
+
+  await prisma.aiActivity.create({
+    data: { workspaceId: workspace.id, kind: "analyze", tag: "Analyzer", text: `Преанализирам ${lead.company}...` },
+  });
+
+  const analysis = await analyzeWebsite(`https://${lead.website}`);
+  const painPoints = analysis.painPoints.length > 0 ? analysis.painPoints : analysis.weaknesses.slice(0, 5);
+
+  await prisma.lead.update({
+    where: { id: lead.id },
+    data: {
+      score: analysis.score,
+      painPoints: JSON.stringify(painPoints),
+      analysis: JSON.stringify({
+        hasWebsite: analysis.hasWebsite,
+        websiteReachable: analysis.websiteReachable,
+        strengths: analysis.strengths,
+        weaknesses: analysis.weaknesses,
+        usagePatterns: analysis.usagePatterns,
+        funnelGaps: analysis.funnelGaps,
+        techStack: analysis.techStack,
+        summary: analysis.summary,
+      }),
+      industry: analysis.industry ?? lead.industry,
+    },
+  });
+
+  await prisma.aiActivity.create({
+    data: { workspaceId: workspace.id, kind: "analyze", tag: "Analyzer", text: `${lead.company} преанализиран · score ${analysis.score} · ${analysis.strengths.length}↑ ${analysis.weaknesses.length}↓` },
+  });
+
+  revalidatePath("/leads");
+  return { success: true, score: analysis.score };
+}
+
+export async function updateLeadNotesAction(leadId: string, notes: string) {
+  const workspace = await getCurrentWorkspace();
+  await prisma.lead.update({
+    where: { id: leadId, workspaceId: workspace.id },
+    data: { notes: notes.trim() || null },
+  });
+  revalidatePath("/leads");
+  return { success: true };
 }
 
 export async function updateLeadStatusAction(leadId: string, newStatus: string) {
