@@ -391,6 +391,78 @@ export async function markThreadReadAction(threadId: string) {
 }
 
 // ============================================================
+// AGENT — natural-language prompt → scraping action
+// ============================================================
+
+/**
+ * Parses a free-text prompt (e.g. "намери 50 зъболекари в София") into
+ * structured Apify scrape parameters, then executes the scrape.
+ */
+export async function runAgentPromptAction(promptText: string) {
+  const workspace = await getCurrentWorkspace();
+  const prompt = promptText.trim();
+  if (!prompt) return { success: false, error: "Empty prompt" };
+
+  await prisma.aiActivity.create({
+    data: { workspaceId: workspace.id, kind: "compose", tag: "Agent", text: `Промпт от потребителя: "${prompt.slice(0, 120)}"` },
+  });
+
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!openaiKey) {
+    return { success: false, error: "OPENAI_API_KEY missing — cannot parse prompts" };
+  }
+
+  // Use OpenAI to extract structured params
+  let parsed: { query: string; niche: string; limit: number } | null = null;
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${openaiKey}` },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `You are a lead-gen agent. Parse Bulgarian or English prompts about finding business leads. Return JSON:
+{
+  "query": string  // English Google Maps query, e.g. "dental clinics in Sofia, Bulgaria"
+  "niche": string  // One of: "Зъболекари","Фитнес","Ecommerce","Недвижими имоти","Ресторанти","Адвокати","Salon & Beauty","Auto Repair","Healthcare"
+  "limit": number  // 1-25 (cap at 25 for free tier)
+}
+If prompt is unclear, infer the most likely query. If no location given, default to "Sofia, Bulgaria".`,
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.1,
+      }),
+    });
+    const data = await res.json();
+    parsed = JSON.parse(data.choices[0].message.content);
+  } catch (err) {
+    return { success: false, error: `AI parse error: ${(err as Error).message}` };
+  }
+
+  if (!parsed?.query) return { success: false, error: "Failed to parse prompt" };
+
+  // Cap limit for free tier
+  const limit = Math.min(parsed.limit ?? 10, 25);
+
+  await prisma.aiActivity.create({
+    data: { workspaceId: workspace.id, kind: "compose", tag: "Agent", text: `AI парсна: query="${parsed.query}" · niche=${parsed.niche} · limit=${limit}` },
+  });
+
+  // Execute scrape via existing action
+  const fd = new FormData();
+  fd.set("query", parsed.query);
+  fd.set("niche", parsed.niche);
+  fd.set("limit", String(limit));
+  const res = await scrapeNewLeadsAction(fd);
+
+  return { ...res, parsed };
+}
+
+// ============================================================
 // AGENT — pause/resume + manual tick
 // ============================================================
 

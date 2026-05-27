@@ -2,6 +2,7 @@
 
 import { Bot, Sparkles, Search, FileEdit, Send, MessageSquare, CalendarCheck, RotateCw, AlertTriangle } from "lucide-react";
 import { timeAgoBg } from "@/lib/utils";
+import { AgentPromptInput } from "./AgentPromptInput";
 
 const KIND_ICON: Record<string, { Icon: React.ComponentType<{ size?: number; className?: string }>; color: string }> = {
   scrape:   { Icon: Search,        color: "text-blue" },
@@ -73,19 +74,9 @@ export function AiAgentPanel({ activity, queueCount = 14 }: { activity: AiActivi
         </ul>
       </div>
 
-      {/* Footer prompt */}
+      {/* Footer — interactive AI prompt */}
       <div className="border-t border-line p-3">
-        <div className="text-[11px] text-ink-4 mb-2">Бърз prompt към агента</div>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="напр. намери 50 фитнеси в София"
-            className="w-full h-9 pl-3 pr-9 rounded-lg bg-surface border border-line text-[12.5px] placeholder:text-ink-4 focus:outline-none focus:border-red transition"
-          />
-          <button className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded grid place-items-center bg-red hover:bg-red-hover text-bg">
-            <Send size={11} />
-          </button>
-        </div>
+        <AgentPromptInput />
       </div>
     </aside>
   );
