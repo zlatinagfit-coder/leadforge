@@ -12,57 +12,69 @@ export default async function OverviewPage() {
   const workspace = await getCurrentWorkspace();
   const user = await getCurrentUser();
 
-  const [totalLeads, sent7d, replies7d, meetingsMonth, campaigns, recentLeads, recentThreads] = await Promise.all([
+  const [totalLeads, sentTotal, repliesTotal, meetingsCount, campaigns, recentLeads, recentThreads, sent7d] = await Promise.all([
     prisma.lead.count({ where: { workspaceId: workspace.id } }),
-    prisma.message.count({ where: { campaign: { workspaceId: workspace.id }, status: { in: ["sent", "opened", "replied"] }, sentAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60_000) } } }),
+    prisma.message.count({ where: { campaign: { workspaceId: workspace.id }, status: { in: ["sent", "opened", "replied"] } } }),
     prisma.inboxThread.count({ where: { workspaceId: workspace.id } }),
     prisma.lead.count({ where: { workspaceId: workspace.id, status: "meeting" } }),
     prisma.campaign.findMany({ where: { workspaceId: workspace.id, status: "active" }, orderBy: { sent: "desc" }, take: 5 }),
     prisma.lead.findMany({ where: { workspaceId: workspace.id }, orderBy: { createdAt: "desc" }, take: 8 }),
     prisma.inboxThread.findMany({ where: { workspaceId: workspace.id, unread: true }, orderBy: { lastAt: "desc" }, take: 5 }),
+    prisma.message.count({ where: { campaign: { workspaceId: workspace.id }, sentAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60_000) } } }),
   ]);
 
-  // Synthetic but realistic numbers for the demo (mirror data.js)
+  // REAL numbers from your database
   const kpiData = {
-    totalLeads: { value: 12847, delta: "+18.4%", sub: "намерени тази седмица", spark: [120, 168, 142, 201, 188, 234, 211, 256, 240, 289, 274, 312, 298, 341] },
-    emailsSent: { value: 4291, delta: "+12.1%", sub: "през последните 7 дни", spark: [200, 240, 280, 310, 340, 360, 380, 400, 420, 410, 430, 450, 440, 470] },
-    replies:    { value: 412, delta: "+24.7%", sub: "reply rate 9.6%", spark: [20, 28, 32, 30, 35, 38, 36, 40, 42, 45, 44, 48, 46, 52] },
-    meetings:   { value: 87, delta: "+6.2%", sub: "насрочени този месец", spark: [3, 4, 5, 4, 6, 7, 5, 6, 8, 7, 9, 8, 10, 11] },
+    totalLeads: { value: totalLeads, delta: totalLeads > 0 ? `+${totalLeads}` : "0", sub: "общо в базата" },
+    emailsSent: { value: sentTotal, delta: sent7d > 0 ? `+${sent7d}/7д` : "0", sub: "всички изпратени" },
+    replies:    { value: repliesTotal, delta: repliesTotal > 0 && sentTotal > 0 ? `${((repliesTotal / sentTotal) * 100).toFixed(1)}%` : "0%", sub: "reply rate" },
+    meetings:   { value: meetingsCount, delta: meetingsCount > 0 && repliesTotal > 0 ? `${((meetingsCount / repliesTotal) * 100).toFixed(1)}%` : "0%", sub: "lead-ове в статус Meeting" },
   };
 
+  // Generate sparklines from real data (or empty array if no data yet)
+  const emptySpark = [0, 0, 0, 0, 0, 0, 0];
   const funnelSeries = {
-    sent:    [120, 168, 142, 201, 188, 234, 211, 256, 240, 289, 274, 312, 298, 341],
-    replied: [12, 18, 16, 22, 21, 27, 24, 31, 29, 34, 33, 39, 36, 42],
-    meeting: [2, 3, 3, 4, 5, 6, 5, 7, 7, 8, 8, 10, 9, 11],
+    sent: emptySpark.map((_, i) => Math.round(sentTotal / 14)),
+    replied: emptySpark.map((_, i) => Math.round(repliesTotal / 14)),
+    meeting: emptySpark.map((_, i) => Math.round(meetingsCount / 14)),
   };
 
   const replyRate = ((kpiData.replies.value / kpiData.emailsSent.value) * 100).toFixed(1);
   const meetingRate = ((kpiData.meetings.value / kpiData.replies.value) * 100).toFixed(1);
   const overallConv = ((kpiData.meetings.value / kpiData.emailsSent.value) * 100).toFixed(1);
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Добро утро" : hour < 18 ? "Здравей" : "Добър вечер";
+
   return (
     <div className="p-8 max-w-[1400px] mx-auto">
       {/* Greeting */}
       <div className="mb-8">
         <div className="flex items-baseline gap-3 mb-2">
-          <h1 className="text-[40px] font-bold leading-none tracking-tight">Добро утро,</h1>
-          <span className="text-[40px] font-serif-italic leading-none text-red">{user.name?.split(" ")[0] ?? "Мария"}</span>
+          <h1 className="text-[40px] font-bold leading-none tracking-tight">{greeting},</h1>
+          <span className="text-[40px] font-serif-italic leading-none text-red">{user.name?.split(" ")[0] ?? "Zlatina"}</span>
           <span className="ml-2 flex items-center gap-1.5 px-2 py-1 rounded bg-red-soft border border-red-tint">
             <span className="live-dot" />
             <span className="text-[11px] mono font-bold text-red uppercase tracking-widest">Live</span>
           </span>
         </div>
         <p className="text-[14px] text-ink-3 max-w-[640px]">
-          Тук е обобщението от последните 7 дни. Агентът насрочи <strong className="text-ink">{kpiData.meetings.value} срещи</strong> без human input · намери <strong className="text-ink">{formatNumber(totalLeads)}</strong> нови lead-а в системата.
+          {totalLeads === 0 ? (
+            <>Базата е празна — кликни <strong className="text-ink">„Намери нови"</strong> в Lead-ове за да започнеш със скрейпване на Google Maps.</>
+          ) : sentTotal === 0 ? (
+            <>Имаш <strong className="text-ink">{formatNumber(totalLeads)} lead-а</strong> готови за outreach. Иди в Lead-ове и кликни ✉️ иконата срещу всеки.</>
+          ) : (
+            <>Изпратени <strong className="text-ink">{sentTotal}</strong> outreach имейла · {repliesTotal} отговора · {meetingsCount} срещи.</>
+          )}
         </p>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — real values from your DB */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Общо lead-ове"    value={kpiData.totalLeads.value} delta={kpiData.totalLeads.delta} sub={kpiData.totalLeads.sub} spark={kpiData.totalLeads.spark} Icon={Users}        accent="red" />
-        <KpiCard label="Email-и изпратени" value={kpiData.emailsSent.value} delta={kpiData.emailsSent.delta} sub={kpiData.emailsSent.sub} spark={kpiData.emailsSent.spark} Icon={Send}         accent="blue" />
-        <KpiCard label="Отговори"           value={kpiData.replies.value}    delta={kpiData.replies.delta}    sub={kpiData.replies.sub}    spark={kpiData.replies.spark}    Icon={MessageSquare} accent="amber" />
-        <KpiCard label="Срещи насрочени"    value={kpiData.meetings.value}   delta={kpiData.meetings.delta}   sub={kpiData.meetings.sub}   spark={kpiData.meetings.spark}   Icon={CalendarCheck} accent="green" />
+        <KpiCard label="Общо lead-ове"    value={kpiData.totalLeads.value} delta={kpiData.totalLeads.delta} sub={kpiData.totalLeads.sub} Icon={Users}        accent="red" />
+        <KpiCard label="Email-и изпратени" value={kpiData.emailsSent.value} delta={kpiData.emailsSent.delta} sub={kpiData.emailsSent.sub} Icon={Send}         accent="blue" />
+        <KpiCard label="Отговори"           value={kpiData.replies.value}    delta={kpiData.replies.delta}    sub={kpiData.replies.sub}    Icon={MessageSquare} accent="amber" />
+        <KpiCard label="Срещи насрочени"    value={kpiData.meetings.value}   delta={kpiData.meetings.delta}   sub={kpiData.meetings.sub}   Icon={CalendarCheck} accent="green" />
       </div>
 
       {/* Funnel + Active campaigns */}

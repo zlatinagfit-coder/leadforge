@@ -100,14 +100,12 @@ export async function POST(req: NextRequest) {
       leads.push({ id: lead.id, company: lead.company });
     }
 
+    // Real campaigns start at zero — these are placeholders you can use right away
     await prisma.campaign.createMany({
       data: [
-        { workspaceId: workspace.id, name: "EU Dental · Q2 Outreach", niche: "Зъболекари", status: "active", sent: 1842, opened: 1124, replied: 287, meetings: 41, health: 96, targetCountry: "UK,DE,BG" },
-        { workspaceId: workspace.id, name: "DE Fitness · Cold", niche: "Фитнес", status: "active", sent: 920, opened: 521, replied: 142, meetings: 19, health: 88, targetCountry: "DE" },
-        { workspaceId: workspace.id, name: "BG Ecom · Black Friday Prep", niche: "Ecommerce", status: "active", sent: 2104, opened: 1389, replied: 401, meetings: 62, health: 94, targetCountry: "BG" },
-        { workspaceId: workspace.id, name: "Dubai Realty · Premium", niche: "Недвижими имоти", status: "paused", sent: 612, opened: 388, replied: 88, meetings: 12, health: 71, targetCountry: "AE" },
-        { workspaceId: workspace.id, name: "UK Dental · Retargeting", niche: "Зъболекари", status: "active", sent: 488, opened: 311, replied: 92, meetings: 14, health: 90, targetCountry: "UK" },
-        { workspaceId: workspace.id, name: "BG Ресторанти · Pilot", niche: "Ресторанти", status: "draft", sent: 0, opened: 0, replied: 0, meetings: 0, health: 100, targetCountry: "BG" },
+        { workspaceId: workspace.id, name: "BG Зъболекари — Pilot", niche: "Зъболекари", status: "draft", sent: 0, opened: 0, replied: 0, meetings: 0, health: 100, targetCountry: "BG" },
+        { workspaceId: workspace.id, name: "BG Фитнес студия", niche: "Фитнес", status: "draft", sent: 0, opened: 0, replied: 0, meetings: 0, health: 100, targetCountry: "BG" },
+        { workspaceId: workspace.id, name: "BG Ecommerce — Q3", niche: "Ecommerce", status: "draft", sent: 0, opened: 0, replied: 0, meetings: 0, health: 100, targetCountry: "BG" },
       ],
     });
 

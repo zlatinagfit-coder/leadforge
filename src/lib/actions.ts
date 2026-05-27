@@ -92,6 +92,132 @@ export async function scrapeNewLeadsAction(formData: FormData) {
   return { success: true, count: created.length };
 }
 
+/**
+ * Sends a real, AI-personalized outreach email to a single lead.
+ *
+ * In sandbox mode (no verified Resend domain):
+ *   - Resend will only accept the message if `to` is the account-owner email.
+ *   - We auto-redirect outreach to RESEND_OWNER_EMAIL so user can preview the email
+ *     in their own inbox without owning the prospect domain.
+ */
+export async function sendOutreachToLeadAction(leadId: string) {
+  const workspace = await getCurrentWorkspace();
+  const user = await getCurrentUser();
+  const lead = await prisma.lead.findFirst({ where: { id: leadId, workspaceId: workspace.id } });
+  if (!lead) return { success: false, error: "Lead not found" };
+  if (!lead.email) return { success: false, error: "Lead has no email — run 'Намери нови' first" };
+
+  const pains: string[] = lead.painPoints ? JSON.parse(lead.painPoints) : [];
+
+  // Generate AI outreach
+  let email;
+  try {
+    email = await generateOutreach({
+      companyName: lead.company,
+      website: lead.website ?? undefined,
+      niche: lead.niche,
+      painPoints: pains.length > 0 ? pains : ["Слаб онлайн funnel", "Няма retargeting"],
+      senderName: user.name ?? "Екипът",
+      language: "bg",
+    });
+  } catch (err) {
+    return { success: false, error: `AI generate: ${(err as Error).message}` };
+  }
+
+  // Pick sending inbox or fallback to env
+  const inbox = await prisma.sendingInbox.findFirst({
+    where: { workspaceId: workspace.id, warmedUp: true },
+    orderBy: { sentToday: "asc" },
+  });
+  const fromEmail = inbox?.fromEmail ?? process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const fromName = inbox?.fromName ?? process.env.RESEND_FROM_NAME ?? "LeadForge";
+
+  // Sandbox redirect: if no verified domain, Resend rejects sending to others
+  // We redirect to user.email so they can preview
+  const ownerEmail = user.email;
+  const isSandbox = (fromEmail.endsWith("@resend.dev") || fromEmail === ownerEmail);
+  const actualRecipient = isSandbox ? ownerEmail : lead.email;
+  const subjectPrefix = isSandbox ? `[ТЕСТ → ${lead.email}] ` : "";
+
+  const sendResult = await sendEmail({
+    from: fromEmail,
+    fromName,
+    to: actualRecipient,
+    subject: subjectPrefix + email.subject,
+    body: email.body + (isSandbox ? `\n\n---\n[Sandbox mode] Този имейл щеше да бъде изпратен до: ${lead.email}\nЗа да изпращаш реални имейли, verify-ни домейн в Resend.` : ""),
+    replyTo: ownerEmail,
+    provider: "resend",
+  });
+
+  // Persist a Message record so it shows up in inbox/leads history
+  // Find or create a "Manual sends" campaign
+  let campaign = await prisma.campaign.findFirst({
+    where: { workspaceId: workspace.id, name: "Manual outreach" },
+  });
+  if (!campaign) {
+    campaign = await prisma.campaign.create({
+      data: { workspaceId: workspace.id, name: "Manual outreach", niche: null, status: "active" },
+    });
+  }
+
+  await prisma.message.create({
+    data: {
+      campaignId: campaign.id,
+      leadId: lead.id,
+      subject: email.subject,
+      body: email.body,
+      status: sendResult.success ? "sent" : "failed",
+      sentAt: sendResult.success ? new Date() : null,
+      errorMsg: sendResult.error,
+    },
+  });
+
+  if (sendResult.success) {
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { status: lead.status === "new" ? "contacted" : lead.status, lastTouchAt: new Date() },
+    });
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: { sent: { increment: 1 } },
+    });
+    if (inbox) {
+      await prisma.sendingInbox.update({
+        where: { id: inbox.id },
+        data: { sentToday: { increment: 1 } },
+      });
+    }
+    await prisma.aiActivity.create({
+      data: {
+        workspaceId: workspace.id,
+        kind: "send",
+        tag: "Sender",
+        text: isSandbox
+          ? `Sandbox: тест-имейл за ${lead.company} → твоя Gmail`
+          : `Outreach изпратен до ${lead.company} (${lead.email})`,
+      },
+    });
+  } else {
+    await prisma.aiActivity.create({
+      data: { workspaceId: workspace.id, kind: "error", tag: "Sender", text: `Грешка при изпращане до ${lead.company}: ${sendResult.error}` },
+    });
+  }
+
+  revalidatePath("/leads");
+  revalidatePath("/");
+  revalidatePath("/inbox");
+  revalidatePath("/agent");
+
+  return {
+    success: sendResult.success,
+    error: sendResult.error,
+    isSandbox,
+    previewSentTo: isSandbox ? ownerEmail : lead.email,
+    intendedRecipient: lead.email,
+    subject: email.subject,
+  };
+}
+
 export async function updateLeadStatusAction(leadId: string, newStatus: string) {
   const workspace = await getCurrentWorkspace();
   await prisma.lead.update({

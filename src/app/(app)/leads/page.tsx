@@ -4,6 +4,7 @@ import { STATUS_META, NICHE_META, formatNumber, timeAgoBg } from "@/lib/utils";
 import { Filter, Download, Search, Plus, Sparkles, Globe, Mail, Phone, MapPin, Linkedin, Instagram, MoreHorizontal } from "lucide-react";
 import { FindNewLeadsButton } from "@/components/FindNewLeadsButton";
 import { LeadStatusDropdown } from "@/components/LeadStatusDropdown";
+import { SendOutreachButton } from "@/components/SendOutreachButton";
 
 export const dynamic = "force-dynamic";
 
@@ -166,10 +167,13 @@ export default async function LeadsPage() {
                   <td className="py-3 px-3 text-right text-[11px] mono text-ink-4">
                     {lead.lastTouchAt ? timeAgoBg(lead.lastTouchAt) : "—"}
                   </td>
-                  <td className="py-3 px-3 opacity-0 group-hover:opacity-100 transition">
-                    <button className="w-7 h-7 grid place-items-center rounded-md hover:bg-line">
-                      <MoreHorizontal size={14} className="text-ink-3" />
-                    </button>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
+                      <SendOutreachButton leadId={lead.id} leadEmail={lead.email} leadCompany={lead.company} />
+                      <button className="w-7 h-7 grid place-items-center rounded-md hover:bg-line" title="Още">
+                        <MoreHorizontal size={13} className="text-ink-3" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
