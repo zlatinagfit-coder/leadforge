@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { STATUS_META, NICHE_META, formatNumber, timeAgoBg } from "@/lib/utils";
 import { Filter, Download, Search, Plus, Sparkles, Globe, Mail, Phone, MapPin, Linkedin, Instagram, MoreHorizontal } from "lucide-react";
+import { FindNewLeadsButton } from "@/components/FindNewLeadsButton";
+import { LeadStatusDropdown } from "@/components/LeadStatusDropdown";
 
 export const dynamic = "force-dynamic";
 
@@ -35,9 +37,7 @@ export default async function LeadsPage() {
           <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg border border-line text-[12.5px] font-semibold text-ink-2 hover:bg-surface transition">
             <Download size={13} /> Експортирай CSV
           </button>
-          <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg bg-ink text-bg text-[12.5px] font-semibold hover:bg-ink-2 transition">
-            <Sparkles size={13} /> Намери нови
-          </button>
+          <FindNewLeadsButton />
         </div>
       </div>
 
@@ -161,7 +161,7 @@ export default async function LeadsPage() {
                     <ScoreBadge score={lead.score} />
                   </td>
                   <td className="py-3 px-3">
-                    <span className="pill" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+                    <LeadStatusDropdown leadId={lead.id} currentStatus={lead.status} />
                   </td>
                   <td className="py-3 px-3 text-right text-[11px] mono text-ink-4">
                     {lead.lastTouchAt ? timeAgoBg(lead.lastTouchAt) : "—"}

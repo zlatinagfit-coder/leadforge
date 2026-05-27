@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { formatNumber } from "@/lib/utils";
 import { Plus, Sparkles, Pause, Play, MoreHorizontal, ArrowUpRight } from "lucide-react";
+import { NewCampaignButton, CampaignToggleButton } from "@/components/CampaignControls";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +42,7 @@ export default async function CampaignsPage() {
             Всяка кампания има AI-генерирана секвенция от 3-5 имейла, авто-follow-up и smart timing.
           </p>
         </div>
-        <button className="h-9 px-3 flex items-center gap-1.5 rounded-lg bg-ink text-bg text-[12.5px] font-semibold hover:bg-ink-2 transition">
-          <Plus size={13} /> Нова кампания
-        </button>
+        <NewCampaignButton />
       </div>
 
       {/* Aggregate KPIs */}
@@ -93,9 +92,7 @@ export default async function CampaignsPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 ml-2">
-                  <button className="w-8 h-8 grid place-items-center rounded-md hover:bg-surface text-ink-3" title={c.status === "active" ? "Спри" : "Стартирай"}>
-                    {c.status === "active" ? <Pause size={14} /> : <Play size={14} />}
-                  </button>
+                  <CampaignToggleButton campaignId={c.id} currentStatus={c.status} />
                   <button className="w-8 h-8 grid place-items-center rounded-md hover:bg-surface text-ink-3">
                     <MoreHorizontal size={14} />
                   </button>

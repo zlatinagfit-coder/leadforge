@@ -1,16 +1,10 @@
 /**
- * Google Maps scraper — финдер на бизнеси по ниша и локация.
+ * Google Maps scraper via Apify.
  *
- * ✅ Безплатен метод: Playwright + ScrapingBee proxy (избягва блокиране)
- * 💰 Premium метод: Apify Google Maps actor (~$0.20 на 1000 бизнеса)
+ * Uses the official Apify Google Maps Extractor actor (compass/google-maps-extractor).
+ * Free tier: $5/month credit auto-renewing = ~70,000 places/mo.
  *
- * За production добави:
- *   npm install playwright (или: npm install apify-client)
- *
- * SETUP:
- *   1. SCRAPINGBEE_API_KEY от scrapingbee.com (1000 безплатни requests/мес)
- *   ИЛИ
- *   2. APIFY_TOKEN от apify.com (избери Google Maps Scraper actor)
+ * Cost: ~$0.07 per 1000 places scraped.
  */
 
 export type ScrapedBusiness = {
@@ -25,29 +19,81 @@ export type ScrapedBusiness = {
   category?: string;
 };
 
-export async function scrapeGoogleMaps(query: string, limit = 50): Promise<ScrapedBusiness[]> {
-  const apifyToken = process.env.APIFY_TOKEN;
-  const scrapingBeeKey = process.env.SCRAPINGBEE_API_KEY;
+type ApifyMapsResult = {
+  title?: string;
+  website?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  countryCode?: string;
+  totalScore?: number;
+  reviewsCount?: number;
+  categoryName?: string;
+};
 
-  // TODO: Apify path
-  if (apifyToken) {
-    // const { ApifyClient } = await import("apify-client");
-    // const client = new ApifyClient({ token: apifyToken });
-    // const run = await client.actor("compass/crawler-google-places").call({
-    //   searchStringsArray: [query],
-    //   maxCrawledPlacesPerSearch: limit,
-    // });
-    // const { items } = await client.dataset(run.defaultDatasetId).listItems();
-    // return items.map(mapApifyToScrapedBusiness);
-    throw new Error("TODO: implement Apify scraper — see src/lib/integrations/scraper.ts");
+/**
+ * Scrapes Google Maps via Apify actor.
+ * @param query e.g. "dentists in London" or "fitness studios Berlin"
+ * @param limit max number of businesses (default 25)
+ */
+export async function scrapeGoogleMaps(query: string, limit = 25): Promise<ScrapedBusiness[]> {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) {
+    console.warn("⚠️  APIFY_TOKEN missing — returning empty results");
+    return [];
   }
 
-  // TODO: ScrapingBee + Playwright path
-  if (scrapingBeeKey) {
-    throw new Error("TODO: implement ScrapingBee scraper — see src/lib/integrations/scraper.ts");
-  }
+  // Run actor synchronously (waits for completion + returns dataset)
+  const url = `https://api.apify.com/v2/acts/compass~google-maps-extractor/run-sync-get-dataset-items?token=${token}`;
 
-  // No API key — return empty so demo doesn't crash
-  console.warn("⚠️  No scraper configured. Set APIFY_TOKEN or SCRAPINGBEE_API_KEY in .env");
-  return [];
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        searchStringsArray: [query],
+        maxCrawledPlacesPerSearch: limit,
+        language: "en",
+        scrapeContacts: true,
+        // Lean output - we only need basic fields
+        includeWebResults: false,
+        scrapeReviewsCount: 0,
+      }),
+      // Apify sync calls can take a few minutes — extend timeout
+      signal: AbortSignal.timeout(180_000),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Apify HTTP ${res.status}: ${text.slice(0, 300)}`);
+    }
+
+    const items: ApifyMapsResult[] = await res.json();
+
+    return items
+      .filter((item) => item.title && item.website) // need website for outreach
+      .map((item) => ({
+        name: item.title!,
+        website: cleanWebsite(item.website),
+        phone: item.phone ?? undefined,
+        address: item.address ?? undefined,
+        city: item.city ?? undefined,
+        country: item.countryCode ?? undefined,
+        rating: item.totalScore ?? undefined,
+        reviewCount: item.reviewsCount ?? undefined,
+        category: item.categoryName ?? undefined,
+      }));
+  } catch (err) {
+    console.error("Apify scrape error:", err);
+    throw err;
+  }
+}
+
+function cleanWebsite(url?: string): string | undefined {
+  if (!url) return undefined;
+  return url
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/$/, "")
+    .split(/[/?#]/)[0];
 }

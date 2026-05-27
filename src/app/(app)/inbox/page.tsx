@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspace";
 import { timeAgoBg } from "@/lib/utils";
 import { Inbox as InboxIcon, Flame, Sparkles, Archive, Send, Reply, CheckCheck, Star } from "lucide-react";
+import { ReplyBox } from "@/components/ReplyBox";
 
 export const dynamic = "force-dynamic";
 
@@ -141,26 +142,7 @@ export default async function InboxPage() {
 
           {/* Reply box */}
           <div className="border-t border-line p-4">
-            <div className="card p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={12} className="text-red" />
-                <span className="text-[11px] mono uppercase tracking-wider font-bold text-ink-3">AI suggest reply</span>
-                <span className="text-[11px] text-ink-4">— готов draft на база intent</span>
-              </div>
-              <textarea
-                rows={3}
-                placeholder="Здравейте Sarah, благодаря за бързия отговор! Имам слот този петък в 14:30 GMT — изпращам ви Calendar link..."
-                className="w-full text-[13px] bg-transparent resize-none focus:outline-none placeholder:text-ink-4"
-              />
-              <div className="flex items-center justify-between mt-2">
-                <button className="text-[11.5px] mono font-bold text-ink-3 hover:text-red flex items-center gap-1">
-                  <Sparkles size={11} /> Регенерирай
-                </button>
-                <button className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-red text-bg text-[12px] font-bold hover:bg-red-hover transition">
-                  <Send size={11} /> Изпрати
-                </button>
-              </div>
-            </div>
+            <ReplyBox threadId={activeThread.id} />
           </div>
         </div>
       )}
