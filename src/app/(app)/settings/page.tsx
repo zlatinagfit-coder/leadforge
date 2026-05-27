@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspace";
-import { Building2, Palette, Globe, Users, Mail, Sparkles, Key, Clock, Calculator } from "lucide-react";
+import { Building2, Palette, Globe, Users, Mail, Sparkles, Key, Clock } from "lucide-react";
 import { WorkspaceSettingsForm, InboxesPanel, TeamPanel, BrandingPanel, FollowupConfigPanel } from "@/components/SettingsPanels";
 import { ApiKeysPanel } from "@/components/ApiKeysPanel";
-import { CostCalculator } from "@/components/CostCalculator";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +30,6 @@ export default async function SettingsPage() {
         {/* Side nav — anchor links to sections */}
         <nav className="space-y-0.5 sticky top-[80px] self-start">
           <SettingsNavLink Icon={Key}       label="API ключове"     href="#apikeys" />
-          <SettingsNavLink Icon={Calculator} label="Cost calculator" href="#calculator" />
           <SettingsNavLink Icon={Clock}     label="Follow-up"      href="#followup" />
           <SettingsNavLink Icon={Building2} label="Workspace"      href="#workspace" />
           <SettingsNavLink Icon={Palette}   label="Brandиране"     href="#branding" />
@@ -43,7 +41,7 @@ export default async function SettingsPage() {
         {/* Content */}
         <div className="space-y-6">
           {/* API KEYS — most important */}
-          <Section id="apikeys" title="🔑 Твоите API ключове" subtitle="Свържи всичките си платформи. Те ще таксуват ТВОЯТА карта директно — ние не виждаме нито един cent.">
+          <Section id="apikeys" title="🔑 Твоите API ключове" subtitle="Свържи всичките си платформи. Системата ще ги използва директно срещу твоите акаунти.">
             <ApiKeysPanel workspace={{
               openaiApiKey: workspace.openaiApiKey,
               apifyToken: workspace.apifyToken,
@@ -52,11 +50,6 @@ export default async function SettingsPage() {
               resendFromEmail: workspace.resendFromEmail,
               resendFromName: workspace.resendFromName,
             }} />
-          </Section>
-
-          {/* COST CALCULATOR */}
-          <Section id="calculator" title="💰 Cost calculator" subtitle="Колко ще ти струва роботът на месец при различен обем outreach. Реални цени, без скрити такси.">
-            <CostCalculator />
           </Section>
 
           {/* FOLLOW-UP CONFIG */}
@@ -116,7 +109,7 @@ export default async function SettingsPage() {
               </div>
               <div>
                 <div className="text-[14px] font-bold mb-0.5">Pro tip</div>
-                <div className="text-[12px] text-ink-3">Купи домейн (~$10/год) и го verify-ни в Resend → ще можеш да изпращаш истински имейли към клиенти.</div>
+                <div className="text-[12px] text-ink-3">Купи домейн и го verify-ни в Resend → ще можеш да изпращаш истински имейли към клиенти.</div>
               </div>
             </div>
             <a href="https://resend.com/domains" target="_blank" rel="noreferrer" className="h-9 px-3 rounded-lg bg-ink text-bg text-[12.5px] font-semibold hover:bg-ink-2 inline-flex items-center">

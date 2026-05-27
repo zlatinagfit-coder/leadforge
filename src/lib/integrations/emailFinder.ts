@@ -2,12 +2,12 @@
  * Email finder — намира имейли за даден бизнес/сайт.
  *
  * 3-степенна стратегия:
- *   1. Pattern guessing (info@, contact@, hello@) — БЕЗПЛАТНО
- *   2. Hunter.io API (намира конкретни имена на хора) — $49/мес
- *   3. Snov.io API (евтин fallback) — $39/мес
+ *   1. Pattern guessing (info@, contact@, hello@)
+ *   2. Hunter.io API (намира конкретни имена на хора)
+ *   3. Snov.io API (alternative)
  *
  * SETUP:
- *   HUNTER_API_KEY от hunter.io/api (50 безплатни search-а/мес)
+ *   HUNTER_API_KEY от hunter.io/api
  */
 
 const COMMON_PATTERNS = ["info", "contact", "hello", "team", "office", "sales", "admin", "support"];

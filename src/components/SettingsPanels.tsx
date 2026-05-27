@@ -370,7 +370,7 @@ export function EmailConfigPanel({ workspace }: { workspace: { resendApiKey?: st
         </div>
       </div>
 
-      <Field label="Resend API ключ" hint="Купи домейн ($10/год) → verify в Resend → копирай API ключа от https://resend.com/api-keys">
+      <Field label="Resend API ключ" hint="Купи домейн → verify в Resend → копирай API ключа от https://resend.com/api-keys">
         <div className="relative">
           <input
             type={showKey ? "text" : "password"}
@@ -418,7 +418,7 @@ export function EmailConfigPanel({ workspace }: { workspace: { resendApiKey?: st
 
       <div className="text-[11px] text-ink-4 pt-1">
         💡 Как да получиш Resend API ключ + verified домейн:<br />
-        1. Купи домейн ($10/год от <a href="https://cloudflare.com/products/registrar" target="_blank" rel="noreferrer" className="text-blue underline">Cloudflare</a>)<br />
+        1. Купи домейн от <a href="https://cloudflare.com/products/registrar" target="_blank" rel="noreferrer" className="text-blue underline">Cloudflare</a><br />
         2. Иди на <a href="https://resend.com/signup" target="_blank" rel="noreferrer" className="text-blue underline">resend.com</a> · Add Domain · добавиш DNS записите<br />
         3. API Keys → Create → копирай ключа (re_...) и го постави тук
       </div>

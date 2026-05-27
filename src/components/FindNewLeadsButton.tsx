@@ -161,10 +161,6 @@ export function FindNewLeadsButton() {
                 </div>
               )}
 
-              {/* Cost preview */}
-              <div className="text-[11px] text-ink-4 mono">
-                💸 Примерен cost: ~${(limit * 0.07 / 1000).toFixed(4)} Apify + ~${(limit * 0.0002).toFixed(4)} OpenAI = ~${(limit * 0.07 / 1000 + limit * 0.0002).toFixed(4)} общо
-              </div>
             </div>
 
             {/* Footer */}

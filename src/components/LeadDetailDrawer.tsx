@@ -394,9 +394,6 @@ function OutreachTab({ lead, painPoints }: { lead: LeadDetail; painPoints: strin
         {pending ? "AI пише + изпраща..." : !lead.email ? "Няма имейл за изпращане" : "Изпрати персонализиран outreach"}
       </button>
 
-      <div className="text-[11px] text-ink-4 text-center">
-        Cost: ~$0.0002 per имейл (OpenAI) + $0 (Resend free tier)
-      </div>
     </div>
   );
 }

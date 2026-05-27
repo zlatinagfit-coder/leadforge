@@ -2,9 +2,6 @@
  * Google Maps scraper via Apify.
  *
  * Uses the official Apify Google Maps Extractor actor (compass/google-maps-extractor).
- * Free tier: $5/month credit auto-renewing = ~70,000 places/mo.
- *
- * Cost: ~$0.07 per 1000 places scraped.
  */
 
 export type ScrapedBusiness = {

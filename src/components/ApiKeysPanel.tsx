@@ -75,7 +75,6 @@ export function ApiKeysPanel({ workspace }: { workspace: ApiKeyConfig }) {
         result={results.openai}
         pending={pending}
         link="https://platform.openai.com/api-keys"
-        priceHint="$0.0003-0.001 на lead · ~$1-3/мес при 1000 имейла"
       />
 
       {/* Apify */}
@@ -90,7 +89,6 @@ export function ApiKeysPanel({ workspace }: { workspace: ApiKeyConfig }) {
         result={results.apify}
         pending={pending}
         link="https://console.apify.com/settings/integrations"
-        priceHint="$0.07 на 1000 lead-а · $5 безплатен кредит/мес"
       />
 
       {/* Resend */}
@@ -105,7 +103,6 @@ export function ApiKeysPanel({ workspace }: { workspace: ApiKeyConfig }) {
         result={results.resend}
         pending={pending}
         link="https://resend.com/api-keys"
-        priceHint="FREE до 3000 имейла/мес · $20/мес за 50,000"
       />
 
       {/* Resend domain config */}
@@ -138,14 +135,13 @@ export function ApiKeysPanel({ workspace }: { workspace: ApiKeyConfig }) {
       <ApiKeyField
         label="Hunter.io API key"
         provider="Hunter.io"
-        purpose="Премиум email finder · намира конкретни хора (опционално)"
+        purpose="Премиум email finder · намира конкретни хора (опционално · без него системата ползва pattern guessing)"
         placeholder="..."
         value={hunter}
         onChange={setHunter}
         result={results.hunter}
         pending={pending}
         link="https://hunter.io/api-keys"
-        priceHint="$49/мес за 500 търсения · БЕЗ него → използва pattern guessing (info@, contact@)"
       />
 
       {/* Save */}
@@ -159,16 +155,16 @@ export function ApiKeysPanel({ workspace }: { workspace: ApiKeyConfig }) {
       </div>
 
       <div className="text-[11.5px] text-ink-4 pt-2">
-        💡 След като запазиш — всеки изпратен имейл, scrape и AI анализ ще използват <strong>твоите</strong> API ключове. Платформите ще таксуват <strong>твоята</strong> карта директно. Ние не виждаме нито един cent.
+        💡 След като запазиш — всеки изпратен имейл, scrape и AI анализ ще използват <strong>твоите</strong> API ключове директно срещу твоите акаунти.
       </div>
     </form>
   );
 }
 
-function ApiKeyField({ label, required, provider, purpose, placeholder, value, onChange, result, pending, link, priceHint }: {
+function ApiKeyField({ label, required, provider, purpose, placeholder, value, onChange, result, pending, link }: {
   label: string; required?: boolean; provider: string; purpose: string; placeholder: string;
   value: string; onChange: (v: string) => void; result?: TestResult; pending: boolean;
-  link: string; priceHint: string;
+  link: string;
 }) {
   const [showKey, setShowKey] = useState(false);
 
@@ -211,7 +207,7 @@ function ApiKeyField({ label, required, provider, purpose, placeholder, value, o
       </div>
 
       <div className="text-[11px] text-ink-4 ml-7">
-        <span className="text-ink-3">{purpose}</span> · <span className="mono">{priceHint}</span>
+        {purpose}
       </div>
     </div>
   );

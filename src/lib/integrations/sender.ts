@@ -1,9 +1,9 @@
 /**
  * Email sender — изпраща през Resend, Gmail SMTP или SendGrid.
  *
- * 🟢 Resend (препоръчвано за старт): 3000 безплатни/мес, $20/мес за 50k
- * 🟡 Gmail SMTP: лично за всеки потребител, 500/ден лимит
- * 🟠 SendGrid: $20/мес, 40k имейли
+ * Resend (препоръчвано за старт)
+ * Gmail SMTP: лично за всеки потребител, 500/ден лимит
+ * SendGrid
  *
  * SETUP:
  *   RESEND_API_KEY от resend.com
