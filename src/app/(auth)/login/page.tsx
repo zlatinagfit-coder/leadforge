@@ -1,10 +1,16 @@
 import { LoginForm } from "@/components/LoginForm";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session?.user) redirect("/");
+  // Only redirect if session points to a user that actually exists in DB
+  // (handles stale JWTs after DB wipes)
+  if (session?.user?.id) {
+    const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (user) redirect("/");
+  }
 
   return (
     <div className="w-full max-w-[400px]">
